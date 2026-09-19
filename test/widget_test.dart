@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:ai_dictionary/main.dart';
+import 'package:ai_dictionary/app/app.dart';
 
 void main() {
   testWidgets('shows the dictionary workspace', (tester) async {
