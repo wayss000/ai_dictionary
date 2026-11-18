@@ -62,13 +62,23 @@ class _DictionaryPageState extends State<DictionaryPage> {
   Future<void> _selectLanguage() async {
     final selected = await showLanguagePicker(
       context,
+      languagePairs: _viewModel.languagePairs,
       selectedLanguagePair: _viewModel.languagePair,
     );
+    if (selected == kManageLanguageSignal) {
+      if (!mounted) return;
+      _openSettings(initialTab: 2);
+      return;
+    }
     if (selected != null) _viewModel.selectLanguagePair(selected);
   }
 
-  Future<void> _openSettings() {
-    return showDictionarySettingsDialog(context, viewModel: _viewModel);
+  Future<void> _openSettings({int initialTab = 0}) {
+    return showDictionarySettingsDialog(
+      context,
+      viewModel: _viewModel,
+      initialTab: initialTab,
+    );
   }
 
   void _explain() => _viewModel.explain(_queryController.text);

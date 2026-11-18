@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../data/llm_call_log.dart';
 import '../data/llm_config.dart';
 import '../data/llm_service.dart';
+import '../data/language_pair_store.dart';
 
 class DictionaryViewModel extends ChangeNotifier {
   DictionaryViewModel({LlmService? llmService})
@@ -17,6 +18,7 @@ class DictionaryViewModel extends ChangeNotifier {
   static const defaultLanguagePair = '自动识别 → 中文';
 
   LlmConfigStore _store = const LlmConfigStore();
+  LanguagePairStore _langStore = const LanguagePairStore();
   List<LlmCallLog> _logs = [];
   String _languagePair = defaultLanguagePair;
   bool _isLoading = false;
@@ -29,6 +31,7 @@ class DictionaryViewModel extends ChangeNotifier {
   LlmConfig get config => _store.active ?? const LlmConfig(id: '');
   List<LlmConfig> get profiles => _store.profiles;
   String? get activeProfileId => _store.activeId;
+  List<String> get languagePairs => _langStore.pairs;
   List<LlmCallLog> get logs => List.unmodifiable(_logs);
   String get languagePair => _languagePair;
   bool get isLoading => _isLoading;
@@ -46,6 +49,8 @@ class DictionaryViewModel extends ChangeNotifier {
 
   Future<void> _init() async {
     _store = await LlmConfigStore.load();
+    _langStore = await LanguagePairStore.load();
+    _languagePair = _langStore.selected;
     _logs = await LlmCallLogStore.load();
     _notify();
   }
@@ -93,10 +98,36 @@ class DictionaryViewModel extends ChangeNotifier {
     _notify();
   }
 
-  void selectLanguagePair(String languagePair) {
+  /// 切换生效的语言组合并持久化。
+  Future<void> selectLanguagePair(String languagePair) async {
     if (_languagePair == languagePair) return;
+    if (!_langStore.pairs.contains(languagePair)) return;
     _languagePair = languagePair;
-    notifyListeners();
+    _langStore = _langStore.copyWith(selected: languagePair);
+    await _langStore.save();
+    _notify();
+  }
+
+  /// 新增语言组合（去重）。
+  Future<void> addLanguagePair(String languagePair) async {
+    final text = languagePair.trim();
+    if (text.isEmpty || _langStore.pairs.contains(text)) return;
+    _langStore = _langStore.copyWith(pairs: [..._langStore.pairs, text]);
+    await _langStore.save();
+    _notify();
+  }
+
+  /// 删除语言组合；若删除的是生效组合则切到第一个剩余组合。至少保留一个。
+  Future<void> deleteLanguagePair(String languagePair) async {
+    if (_langStore.pairs.length <= 1) return;
+    if (!_langStore.pairs.contains(languagePair)) return;
+    final pairs = [..._langStore.pairs]..remove(languagePair);
+    var selected = _langStore.selected;
+    if (selected == languagePair) selected = pairs.first;
+    _langStore = LanguagePairStore(pairs: pairs, selected: selected);
+    _languagePair = selected;
+    await _langStore.save();
+    _notify();
   }
 
   Future<void> explain(String query) async {

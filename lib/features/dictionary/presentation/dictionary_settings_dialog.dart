@@ -5,21 +5,23 @@ import '../data/llm_call_log.dart';
 import '../data/llm_config.dart';
 import '../data/llm_service.dart';
 
-/// 打开设置面板：模型配置（多模型切换）+ 调用日志。
+/// 打开设置面板：模型配置 / 调用日志 / 语言组合。
 Future<void> showDictionarySettingsDialog(
   BuildContext context, {
   required DictionaryViewModel viewModel,
+  int initialTab = 0,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (context) => _SettingsPanel(viewModel: viewModel),
+    builder: (context) => _SettingsPanel(viewModel: viewModel, initialTab: initialTab),
   );
 }
 
 class _SettingsPanel extends StatefulWidget {
-  const _SettingsPanel({required this.viewModel});
+  const _SettingsPanel({required this.viewModel, this.initialTab = 0});
 
   final DictionaryViewModel viewModel;
+  final int initialTab;
 
   @override
   State<_SettingsPanel> createState() => _SettingsPanelState();
@@ -27,12 +29,13 @@ class _SettingsPanel extends StatefulWidget {
 
 class _SettingsPanelState extends State<_SettingsPanel> {
   String? _editingId;
-  int _selectedTab = 0;
+  late int _selectedTab = widget.initialTab;
   final _nameController = TextEditingController();
   final _baseUrlController = TextEditingController();
   final _apiKeyController = TextEditingController();
   final _modelController = TextEditingController();
   final _timeoutController = TextEditingController(text: '60');
+  final _langController = TextEditingController();
 
   bool _obscureApiKey = true;
   bool _isTesting = false;
@@ -46,6 +49,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     _apiKeyController.dispose();
     _modelController.dispose();
     _timeoutController.dispose();
+    _langController.dispose();
     super.dispose();
   }
 
@@ -153,9 +157,11 @@ class _SettingsPanelState extends State<_SettingsPanel> {
               _buildSidebar(theme),
               const VerticalDivider(width: 24),
               Expanded(
-                child: _selectedTab == 0
-                    ? _buildModelTab(theme)
-                    : _buildLogTab(theme),
+                child: switch (_selectedTab) {
+                  1 => _buildLogTab(theme),
+                  2 => _buildLanguageTab(theme),
+                  _ => _buildModelTab(theme),
+                },
               ),
             ],
           ),
@@ -178,6 +184,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         children: [
           _sideItem(theme, 0, Icons.tune_outlined, '模型配置'),
           _sideItem(theme, 1, Icons.receipt_long_outlined, '调用日志'),
+          _sideItem(theme, 2, Icons.translate_outlined, '语言组合'),
         ],
       ),
     );
@@ -365,6 +372,102 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         Text(
           'API Key 仅保存在本机（shared_preferences），不会上传。',
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black45),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLanguageTab(ThemeData theme) {
+    final viewModel = widget.viewModel;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('已保存的语言组合（点选切换生效）',
+            style:
+                theme.textTheme.bodySmall?.copyWith(color: Colors.black54)),
+        const SizedBox(height: 4),
+        Flexible(
+          child: RadioGroup<String>(
+            groupValue: viewModel.languagePair,
+            onChanged: (value) {
+              if (value != null) viewModel.selectLanguagePair(value);
+            },
+            child: ListView(
+              shrinkWrap: true,
+              children: [
+                for (final pair in viewModel.languagePairs)
+                  RadioListTile<String>(
+                    value: pair,
+                    dense: true,
+                    title: Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            pair,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontWeight:
+                                  pair == viewModel.languagePair
+                                      ? FontWeight.w700
+                                      : FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        if (pair == viewModel.languagePair) ...[
+                          const SizedBox(width: 6),
+                          const Icon(Icons.check_circle,
+                              size: 16, color: Colors.green),
+                          const SizedBox(width: 4),
+                          const Text('生效中',
+                              style: TextStyle(
+                                  fontSize: 12, color: Colors.green)),
+                        ],
+                      ],
+                    ),
+                    secondary: IconButton(
+                      onPressed: viewModel.languagePairs.length <= 1
+                          ? null
+                          : () => viewModel.deleteLanguagePair(pair),
+                      icon: Icon(
+                        Icons.delete_outline,
+                        size: 18,
+                        color: viewModel.languagePairs.length <= 1
+                            ? Colors.black26
+                            : theme.colorScheme.error,
+                      ),
+                      tooltip: viewModel.languagePairs.length <= 1
+                          ? '至少保留一个组合'
+                          : '删除',
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const Divider(height: 24),
+        Text('新增语言组合',
+            style: const TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        _buildField(
+          label: '语言组合（输入语言 → 输出语言）',
+          hint: '例如 法语 → 中文',
+          controller: _langController,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            const Spacer(),
+            FilledButton.icon(
+              onPressed: () async {
+                final text = _langController.text.trim();
+                if (text.isEmpty) return;
+                await widget.viewModel.addLanguagePair(text);
+                _langController.clear();
+              },
+              icon: const Icon(Icons.add, size: 16),
+              label: const Text('添加'),
+            ),
+          ],
         ),
       ],
     );

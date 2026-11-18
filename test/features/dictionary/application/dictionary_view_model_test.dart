@@ -101,6 +101,35 @@ void main() {
     viewModel.dispose();
   });
 
+  test('add and delete language pairs with selection fallback', () async {
+    final viewModel = DictionaryViewModel();
+    await Future<void>.delayed(Duration.zero);
+
+    await viewModel.addLanguagePair('法语 → 中文');
+    expect(viewModel.languagePairs, contains('法语 → 中文'));
+    expect(viewModel.languagePairs, hasLength(6));
+
+    // 重复添加会被去重。
+    await viewModel.addLanguagePair('法语 → 中文');
+    expect(viewModel.languagePairs, hasLength(6));
+
+    // 删除生效组合后自动切到第一个剩余组合。
+    await viewModel.deleteLanguagePair('自动识别 → 中文');
+    expect(viewModel.languagePairs, isNot(contains('自动识别 → 中文')));
+    expect(viewModel.languagePair, '英语 → 中文');
+
+    // 至少保留一个组合。
+    await viewModel.deleteLanguagePair('英语 → 中文');
+    await viewModel.deleteLanguagePair('中文 → 英语');
+    await viewModel.deleteLanguagePair('日语 → 中文');
+    await viewModel.deleteLanguagePair('韩语 → 英语');
+    await viewModel.deleteLanguagePair('法语 → 中文');
+    expect(viewModel.languagePairs, hasLength(1));
+    expect(viewModel.languagePair, '英语 → 中文');
+
+    viewModel.dispose();
+  });
+
   test('clearLogs empties the call logs', () async {
     final viewModel = DictionaryViewModel();
     await Future<void>.delayed(Duration.zero);
