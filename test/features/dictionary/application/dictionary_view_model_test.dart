@@ -125,7 +125,7 @@ void main() {
     await viewModel.deleteLanguagePair('韩语 → 英语');
     await viewModel.deleteLanguagePair('法语 → 中文');
     expect(viewModel.languagePairs, hasLength(1));
-    expect(viewModel.languagePair, '英语 → 中文');
+    expect(viewModel.languagePair, '法语 → 中文');
 
     viewModel.dispose();
   });

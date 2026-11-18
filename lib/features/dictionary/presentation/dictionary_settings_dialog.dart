@@ -150,7 +150,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         ),
         content: SizedBox(
           width: 640,
-          height: 520,
+          height: 560,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -234,34 +234,33 @@ class _SettingsPanelState extends State<_SettingsPanel> {
 
   Widget _buildModelTab(ThemeData theme) {
     final viewModel = widget.viewModel;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    // 用 ListView 让整个页签可滚动，避免内容过高时按钮被裁切。
+    return ListView(
+      padding: EdgeInsets.zero,
       children: [
         Text('已保存的模型（点选切换生效）',
             style:
                 theme.textTheme.bodySmall?.copyWith(color: Colors.black54)),
         const SizedBox(height: 4),
-        Flexible(
-          child: viewModel.profiles.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text('还没有配置，在下方新增一个模型配置。',
-                      style: TextStyle(color: Colors.black38)),
-                )
-              : RadioGroup<String>(
-                  groupValue: viewModel.activeProfileId,
-                  onChanged: (value) {
-                    if (value != null) viewModel.activateProfile(value);
-                  },
-                  child: ListView(
-                    shrinkWrap: true,
-                    children: [
-                      for (final profile in viewModel.profiles)
-                        _profileTile(theme, profile),
-                    ],
-                  ),
-                ),
-        ),
+        if (viewModel.profiles.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text('还没有配置，在下方新增一个模型配置。',
+                style: TextStyle(color: Colors.black38)),
+          )
+        else
+          RadioGroup<String>(
+            groupValue: viewModel.activeProfileId,
+            onChanged: (value) {
+              if (value != null) viewModel.activateProfile(value);
+            },
+            child: Column(
+              children: [
+                for (final profile in viewModel.profiles)
+                  _profileTile(theme, profile),
+              ],
+            ),
+          ),
         const Divider(height: 24),
         Text(
           _editingId == null ? '新增模型配置' : '编辑模型配置',
@@ -379,69 +378,68 @@ class _SettingsPanelState extends State<_SettingsPanel> {
 
   Widget _buildLanguageTab(ThemeData theme) {
     final viewModel = widget.viewModel;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    // 与模型配置页签一致，使用 ListView 保证内容可滚动、按钮不被裁切。
+    return ListView(
+      padding: EdgeInsets.zero,
       children: [
         Text('已保存的语言组合（点选切换生效）',
             style:
                 theme.textTheme.bodySmall?.copyWith(color: Colors.black54)),
         const SizedBox(height: 4),
-        Flexible(
-          child: RadioGroup<String>(
-            groupValue: viewModel.languagePair,
-            onChanged: (value) {
-              if (value != null) viewModel.selectLanguagePair(value);
-            },
-            child: ListView(
-              shrinkWrap: true,
-              children: [
-                for (final pair in viewModel.languagePairs)
-                  RadioListTile<String>(
-                    value: pair,
-                    dense: true,
-                    title: Row(
-                      children: [
-                        Flexible(
-                          child: Text(
-                            pair,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontWeight:
-                                  pair == viewModel.languagePair
-                                      ? FontWeight.w700
-                                      : FontWeight.w500,
-                            ),
+        RadioGroup<String>(
+          groupValue: viewModel.languagePair,
+          onChanged: (value) {
+            if (value != null) viewModel.selectLanguagePair(value);
+          },
+          child: Column(
+            children: [
+              for (final pair in viewModel.languagePairs)
+                RadioListTile<String>(
+                  value: pair,
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          pair,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontWeight:
+                                pair == viewModel.languagePair
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                           ),
                         ),
-                        if (pair == viewModel.languagePair) ...[
-                          const SizedBox(width: 6),
-                          const Icon(Icons.check_circle,
-                              size: 16, color: Colors.green),
-                          const SizedBox(width: 4),
-                          const Text('生效中',
-                              style: TextStyle(
-                                  fontSize: 12, color: Colors.green)),
-                        ],
-                      ],
-                    ),
-                    secondary: IconButton(
-                      onPressed: viewModel.languagePairs.length <= 1
-                          ? null
-                          : () => viewModel.deleteLanguagePair(pair),
-                      icon: Icon(
-                        Icons.delete_outline,
-                        size: 18,
-                        color: viewModel.languagePairs.length <= 1
-                            ? Colors.black26
-                            : theme.colorScheme.error,
                       ),
-                      tooltip: viewModel.languagePairs.length <= 1
-                          ? '至少保留一个组合'
-                          : '删除',
-                    ),
+                      if (pair == viewModel.languagePair) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.check_circle,
+                            size: 16, color: Colors.green),
+                        const SizedBox(width: 4),
+                        const Text('生效中',
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.green)),
+                      ],
+                    ],
                   ),
-              ],
-            ),
+                  secondary: IconButton(
+                    onPressed: viewModel.languagePairs.length <= 1
+                        ? null
+                        : () => viewModel.deleteLanguagePair(pair),
+                    icon: Icon(
+                      Icons.delete_outline,
+                      size: 18,
+                      color: viewModel.languagePairs.length <= 1
+                          ? Colors.black26
+                          : theme.colorScheme.error,
+                    ),
+                    tooltip: viewModel.languagePairs.length <= 1
+                        ? '至少保留一个组合'
+                        : '删除',
+                  ),
+                ),
+            ],
           ),
         ),
         const Divider(height: 24),
