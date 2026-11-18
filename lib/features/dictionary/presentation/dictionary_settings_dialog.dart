@@ -27,10 +27,12 @@ class _SettingsPanel extends StatefulWidget {
 
 class _SettingsPanelState extends State<_SettingsPanel> {
   String? _editingId;
+  int _selectedTab = 0;
   final _nameController = TextEditingController();
   final _baseUrlController = TextEditingController();
   final _apiKeyController = TextEditingController();
   final _modelController = TextEditingController();
+  final _timeoutController = TextEditingController(text: '60');
 
   bool _obscureApiKey = true;
   bool _isTesting = false;
@@ -43,6 +45,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     _baseUrlController.dispose();
     _apiKeyController.dispose();
     _modelController.dispose();
+    _timeoutController.dispose();
     super.dispose();
   }
 
@@ -53,6 +56,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       _baseUrlController.text = profile.baseUrl;
       _apiKeyController.text = profile.apiKey;
       _modelController.text = profile.model;
+      _timeoutController.text = profile.timeoutSeconds.toString();
       _testMessage = null;
     });
   }
@@ -64,6 +68,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       _baseUrlController.clear();
       _apiKeyController.clear();
       _modelController.clear();
+      _timeoutController.text = '60';
       _testMessage = null;
     });
   }
@@ -78,6 +83,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         baseUrl: _baseUrlController.text,
         apiKey: _apiKeyController.text,
         model: _modelController.text,
+        timeoutSeconds:
+            int.tryParse(_timeoutController.text) ?? LlmConfig.defaultTimeoutSeconds,
       );
 
   Future<void> _testConnection() async {
@@ -129,45 +136,90 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     final theme = Theme.of(context);
     return AnimatedBuilder(
       animation: widget.viewModel,
-      builder: (context, _) => DefaultTabController(
-        length: 2,
-        child: AlertDialog(
-          title: Row(
+      builder: (context, _) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.tune, size: 22),
+            const SizedBox(width: 8),
+            const Text('设置'),
+          ],
+        ),
+        content: SizedBox(
+          width: 640,
+          height: 520,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.tune, size: 22),
-              const SizedBox(width: 8),
-              const Text('设置'),
+              _buildSidebar(theme),
+              const VerticalDivider(width: 24),
+              Expanded(
+                child: _selectedTab == 0
+                    ? _buildModelTab(theme)
+                    : _buildLogTab(theme),
+              ),
             ],
           ),
-          content: SizedBox(
-            width: 580,
-            height: 520,
-            child: Column(
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('关闭'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSidebar(ThemeData theme) {
+    return SizedBox(
+      width: 128,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _sideItem(theme, 0, Icons.tune_outlined, '模型配置'),
+          _sideItem(theme, 1, Icons.receipt_long_outlined, '调用日志'),
+        ],
+      ),
+    );
+  }
+
+  Widget _sideItem(ThemeData theme, int index, IconData icon, String label) {
+    final selected = _selectedTab == index;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Material(
+        color: selected
+            ? theme.colorScheme.primary.withValues(alpha: 0.12)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => setState(() => _selectedTab = index),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            child: Row(
               children: [
-                const TabBar(
-                  tabs: [
-                    Tab(text: '模型配置'),
-                    Tab(text: '调用日志'),
-                  ],
+                Icon(
+                  icon,
+                  size: 18,
+                  color: selected
+                      ? theme.colorScheme.primary
+                      : Colors.black54,
                 ),
-                const SizedBox(height: 8),
-                Expanded(
-                  child: TabBarView(
-                    children: [
-                      _buildModelTab(theme),
-                      _buildLogTab(theme),
-                    ],
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                    color: selected
+                        ? theme.colorScheme.primary
+                        : Colors.black87,
                   ),
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('关闭'),
-            ),
-          ],
         ),
       ),
     );
@@ -250,6 +302,13 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           label: '模型名称',
           hint: '例如 glm-4-flash、Qwen/Qwen3.5-4B',
           controller: _modelController,
+        ),
+        const SizedBox(height: 10),
+        _buildField(
+          label: '超时时间（秒）',
+          hint: '默认 60，最小 5',
+          controller: _timeoutController,
+          keyboardType: TextInputType.number,
         ),
         if (_testMessage != null) ...[
           const SizedBox(height: 8),
@@ -461,6 +520,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     required String hint,
     required TextEditingController controller,
     bool obscureText = false,
+    TextInputType? keyboardType,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -472,6 +532,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         TextField(
           controller: controller,
           obscureText: obscureText,
+          keyboardType: keyboardType,
           decoration: InputDecoration(
             hintText: hint,
             border: const OutlineInputBorder(),

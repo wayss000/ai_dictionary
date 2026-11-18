@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import '../data/llm_call_log.dart';
@@ -134,18 +136,25 @@ class DictionaryViewModel extends ChangeNotifier {
           completionTokens: response.completionTokens,
         ),
       );
+    } on TimeoutException {
+      stopwatch.stop();
+      if (_isDisposed) return;
+      final seconds = _store.active?.effectiveTimeoutSeconds ?? 60;
+      _hasError = true;
+      _errorMessage = '请求超时（$seconds 秒）。可在设置中调大该模型的超时时间，或换用更快的模型。';
+      await _addLog(_errorLog(query.trim(), model, stopwatch, '超时（$seconds 秒），请求未完成'));
     } on LlmException catch (error) {
       stopwatch.stop();
       if (_isDisposed) return;
       _hasError = true;
       _errorMessage = error.message;
-      await _addLog(_errorLog(input, model, stopwatch, error.message));
+      await _addLog(_errorLog(query.trim(), model, stopwatch, error.message));
     } catch (error) {
       stopwatch.stop();
       if (_isDisposed) return;
       _hasError = true;
       _errorMessage = '请求出错：$error';
-      await _addLog(_errorLog(input, model, stopwatch, error.toString()));
+      await _addLog(_errorLog(query.trim(), model, stopwatch, error.toString()));
     } finally {
       if (!_isDisposed) {
         _isLoading = false;

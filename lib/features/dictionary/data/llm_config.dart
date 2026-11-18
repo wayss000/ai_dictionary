@@ -10,16 +10,24 @@ class LlmConfig {
     this.baseUrl = defaultBaseUrl,
     this.apiKey = '',
     this.model = defaultModel,
+    this.timeoutSeconds = defaultTimeoutSeconds,
   });
 
   static const defaultBaseUrl = 'https://api.openai.com/v1';
   static const defaultModel = 'gpt-4o-mini';
+  static const defaultTimeoutSeconds = 60;
 
   final String id;
   final String name;
   final String baseUrl;
   final String apiKey;
   final String model;
+
+  /// 请求超时时间（秒）。
+  final int timeoutSeconds;
+
+  /// 实际生效的超时时间，最小 5 秒。
+  int get effectiveTimeoutSeconds => timeoutSeconds < 5 ? 5 : timeoutSeconds;
 
   bool get isConfigured => apiKey.trim().isNotEmpty && model.trim().isNotEmpty;
 
@@ -32,6 +40,7 @@ class LlmConfig {
     String? baseUrl,
     String? apiKey,
     String? model,
+    int? timeoutSeconds,
   }) {
     return LlmConfig(
       id: id ?? this.id,
@@ -39,6 +48,7 @@ class LlmConfig {
       baseUrl: (baseUrl ?? this.baseUrl).trim(),
       apiKey: (apiKey ?? this.apiKey).trim(),
       model: (model ?? this.model).trim(),
+      timeoutSeconds: timeoutSeconds ?? this.timeoutSeconds,
     );
   }
 
@@ -48,6 +58,7 @@ class LlmConfig {
         'baseUrl': baseUrl,
         'apiKey': apiKey,
         'model': model,
+        'timeoutSeconds': timeoutSeconds,
       };
 
   factory LlmConfig.fromJson(Map<String, dynamic> json) => LlmConfig(
@@ -56,6 +67,7 @@ class LlmConfig {
         baseUrl: json['baseUrl'] as String? ?? defaultBaseUrl,
         apiKey: json['apiKey'] as String? ?? '',
         model: json['model'] as String? ?? defaultModel,
+        timeoutSeconds: json['timeoutSeconds'] as int? ?? defaultTimeoutSeconds,
       );
 }
 

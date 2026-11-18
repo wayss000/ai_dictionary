@@ -62,8 +62,6 @@ class LlmService {
 
   final http.Client _client;
 
-  static const _timeout = Duration(seconds: 60);
-
   /// 调用 /chat/completions，让模型输出结构化 JSON 的词典解释。
   Future<ExplainResponse> explain({
     required LlmConfig config,
@@ -75,6 +73,7 @@ class LlmService {
     }
 
     final endpoint = _chatEndpoint(config.baseUrl);
+    final timeout = Duration(seconds: config.effectiveTimeoutSeconds);
     final response = await _client
         .post(
           Uri.parse(endpoint),
@@ -95,7 +94,7 @@ class LlmService {
             ],
           }),
         )
-        .timeout(_timeout);
+        .timeout(timeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw LlmException('请求失败（HTTP ${response.statusCode}）：${_briefError(response.body)}');
@@ -148,7 +147,7 @@ class LlmService {
             ],
           }),
         )
-        .timeout(_timeout);
+        .timeout(Duration(seconds: config.effectiveTimeoutSeconds));
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw LlmException('连接失败（HTTP ${response.statusCode}）：${_briefError(response.body)}');
     }
