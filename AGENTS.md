@@ -4,17 +4,19 @@ This file is the repository-level operating guide for coding agents. Read it bef
 
 ## Project overview
 
-AI Dictionary is a Flutter application for macOS first, with a reusable mobile UI and domain layer. It translates and explains words, phrases, and sentences with a user-selected large language model. The user can choose source/target languages, save multiple model profiles, edit the prompt, and configure caching.
+AI Dictionary is a Flutter desktop application for macOS, with Windows as a future target. It translates and explains words, phrases, and sentences with a user-selected large language model. The user can choose source/target languages, save multiple model profiles, edit the prompt, and configure caching.
 
 Supported model shapes include OpenAI-compatible HTTP APIs, Ollama, Anthropic, and future custom providers. The app must not depend on a bundled dictionary or a bundled local model.
 
-The repository is intentionally multi-platform:
+The repository targets desktop platforms only:
 
-- macos/: macOS host project and platform integration.
-- ios/, android/: mobile host projects kept buildable as shared code evolves.
+- macos/: macOS host project and platform integration. Primary development and build target.
+- windows/: Windows host project, reserved for future Windows development. Do not attempt to build or run it on macOS; it requires a Windows machine with Visual Studio toolchain.
 - lib/: shared Dart application code.
 - test/: unit and widget tests.
 - .github/workflows/: CI and build artifacts.
+
+Mobile platforms (iOS, Android) were removed by decision. If a mobile app is ever required, build it as a separate dedicated project instead of reintroducing mobile host directories here.
 
 ## Commands
 
@@ -35,7 +37,7 @@ Before committing, also run:
     git diff --check
     git status --short
 
-The macOS build requires a macOS runner with the Flutter macOS toolchain. An SSH shell without a GUI can edit and test Dart code, but cannot by itself visually verify a native macOS window.
+The macOS build requires a macOS runner with the Flutter macOS toolchain. An SSH shell without a GUI can edit and test Dart code, but cannot by itself visually verify a native macOS window. The Windows build additionally requires a Windows machine with the Visual Studio C++ toolchain; never verify it on macOS.
 
 ## Flutter version and dependencies
 
