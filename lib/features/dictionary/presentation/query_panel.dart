@@ -73,7 +73,7 @@ class QueryPanel extends StatelessWidget {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.arrow_forward, size: 18),
-                  label: Text(isLoading ? '解释中' : '解释'),
+                  label: Text(isLoading ? '翻译中' : '翻译'),
                 ),
               ],
             ),
