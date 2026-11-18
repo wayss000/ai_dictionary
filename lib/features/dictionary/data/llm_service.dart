@@ -70,6 +70,7 @@ class LlmService {
           body: jsonEncode({
             'model': config.model,
             'temperature': 0.3,
+            'max_tokens': 300,
             'messages': [
               {'role': 'system', 'content': _systemPrompt},
               {
@@ -155,9 +156,12 @@ class LlmService {
     );
   }
 
-  /// 从模型输出中提取 JSON（容忍 markdown 代码块包裹）。
+  /// 从模型输出中提取 JSON（容忍 markdown 代码块与 `<think>` 思考内容包裹）。
   Map<String, dynamic> _extractJson(String raw) {
-    var content = raw.trim();
+    var content = raw
+        .trim()
+        .replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '')
+        .trim();
     final fence = RegExp(r'^```(?:json)?\s*([\s\S]*?)\s*```$');
     final match = fence.firstMatch(content);
     if (match != null) content = match.group(1)!.trim();
@@ -207,14 +211,6 @@ class LlmService {
 }
 
 const _systemPrompt = '''
-你是一名双语词典专家。请根据用户给出的语言方向，解释用户输入的单词、短语或句子。
-规则：
-1. 严格只输出一个 JSON 对象，不要输出任何解释、前后缀或 markdown 代码块。
-2. JSON 字段如下：
-   - "term": 查询的核心词或短语本身（若输入是句子，则给出最关键的短语）
-   - "translation": 对应目标语言的翻译，多个含义用"；"分隔
-   - "context": 在当前语境中的中文解释（若目标语言为中文，则用目标语言），说明它在什么场景下这样用
-   - "partOfSpeech": 主要词性（如：名词、动词、形容词）
-   - "examples": 一个数组，包含 1-2 个贴近日常语境的例句，每个元素形如 {"original": "例句原文", "translated": "例句译文"}
-3. 译文与解释必须自然、地道，符合目标语言表达习惯。
-''';
+你是词典。按用户给的语言方向简要解释输入内容，只输出JSON，无任何其他文字：
+{"term":"查询词","translation":"译文","context":"一句话语境解释","partOfSpeech":"词性","examples":[{"original":"例句","translated":"例句译文"}]}
+每个字段必须简短：translation一个含义即可，context不超过20字，examples最多1条。没有内容就输出空字符串或空数组。''';
