@@ -35,14 +35,16 @@ class DictionaryResultCard extends StatelessWidget {
     if (!hasResult || result == null) return const SizedBox.shrink();
 
     return Card(
-      elevation: 0,
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _ResultHeading(result: result, onCopy: onCopy),
-            const Divider(height: 32),
+            if (result.context.isNotEmpty ||
+                result.partOfSpeech.isNotEmpty ||
+                result.examples.isNotEmpty)
+              const Divider(height: 36),
             if (result.context.isNotEmpty) ...[
               ResultSection(
                 title: '当前语境',
@@ -68,20 +70,10 @@ class DictionaryResultCard extends StatelessWidget {
                 title: '例句',
                 child: _ExampleText(
                   examples: result.examples,
-                  color: Theme.of(context).colorScheme.primary,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-            if (result.context.isEmpty &&
-                result.partOfSpeech.isEmpty &&
-                result.examples.isEmpty)
-              ResultSection(
-                title: '解释',
-                child: Text(
-                  result.translation,
-                  style: const TextStyle(fontSize: 15, height: 1.6),
-                ),
-              ),
-            const SizedBox(height: 24),
+            const Divider(height: 24),
             _ResultFooter(model: result.model, onRetry: onRetry),
           ],
         ),
@@ -96,10 +88,9 @@ class _LoadingResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Card(
-      elevation: 0,
       child: Padding(
-        padding: EdgeInsets.all(32),
-        child: Center(child: CircularProgressIndicator()),
+        padding: EdgeInsets.all(24),
+        child: LinearProgressIndicator(),
       ),
     );
   }
@@ -114,9 +105,8 @@ class _ErrorResultCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      elevation: 0,
       child: Padding(
-        padding: const EdgeInsets.all(24),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -173,15 +163,23 @@ class _ResultHeading extends StatelessWidget {
               SelectableText(
                 result.term,
                 style: const TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 32,
+                  height: 1.18,
+                  fontFamilyFallback: ['Georgia', 'Times New Roman'],
+                  fontFamily: 'Georgia',
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               if (result.translation.isNotEmpty) ...[
                 const SizedBox(height: 6),
                 SelectableText(
                   result.translation,
-                  style: const TextStyle(fontSize: 17),
+                  style: TextStyle(
+                    fontSize: 19,
+                    height: 1.45,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
               ],
             ],
@@ -190,7 +188,7 @@ class _ResultHeading extends StatelessWidget {
         IconButton(
           onPressed: onCopy,
           tooltip: '复制结果',
-          icon: const Icon(Icons.copy_outlined),
+          icon: const Icon(Icons.copy_outlined, size: 18),
         ),
       ],
     );
@@ -205,21 +203,34 @@ class _ExampleText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        for (final example in examples) ...[
-          SelectableText(
-            example.original,
-            style: const TextStyle(fontSize: 15, height: 1.5),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: Theme.of(context).colorScheme.outlineVariant,
+            width: 2,
           ),
-          SelectableText(
-            example.translated,
-            style: TextStyle(fontSize: 15, height: 1.5, color: color),
-          ),
-          if (example != examples.last) const SizedBox(height: 12),
-        ],
-      ],
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.only(left: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final example in examples) ...[
+              SelectableText(
+                example.original,
+                style: const TextStyle(fontSize: 15, height: 1.5),
+              ),
+              SelectableText(
+                example.translated,
+                style: TextStyle(fontSize: 15, height: 1.5, color: color),
+              ),
+              if (example != examples.last) const SizedBox(height: 14),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }
@@ -234,13 +245,12 @@ class _ResultFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Icon(Icons.info_outline, size: 16, color: Colors.black45),
-        const SizedBox(width: 6),
         Expanded(
           child: Text(
             '由 $model 生成，AI 解释可能存在偏差，请结合上下文判断。',
-            style: const TextStyle(color: Colors.black54, fontSize: 12),
-            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
           ),
         ),
         TextButton.icon(
@@ -267,7 +277,7 @@ class ResultSection extends StatelessWidget {
         Text(
           title,
           style: TextStyle(
-            color: Theme.of(context).colorScheme.primary,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w700,
           ),
         ),

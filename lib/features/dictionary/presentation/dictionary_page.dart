@@ -88,51 +88,65 @@ class _DictionaryPageState extends State<DictionaryPage> {
     return AnimatedBuilder(
       animation: _viewModel,
       builder: (context, _) => Scaffold(
-        backgroundColor: const Color(0xFFF8F8FC),
         body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 900),
-              child: CustomScrollView(
-                slivers: [
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(32, 24, 32, 32),
-                    sliver: SliverToBoxAdapter(
-                      child: DictionaryHeader(
-                        languagePair: _viewModel.languagePair,
-                        onLanguagePressed: _selectLanguage,
-                        onSettingsPressed: _openSettings,
-                      ),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final inset = constraints.maxWidth < 480 ? 16.0 : 32.0;
+              return Column(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.fromLTRB(inset, 10, inset, 10),
+                    child: DictionaryHeader(
+                      languagePair: _viewModel.languagePair,
+                      onLanguagePressed: _selectLanguage,
+                      onSettingsPressed: _openSettings,
                     ),
                   ),
-                  SliverPadding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    sliver: SliverToBoxAdapter(
-                      child: QueryPanel(
-                        controller: _queryController,
-                        isLoading: _viewModel.isLoading,
-                        modelLabel: _viewModel.modelLabel,
-                        onExplain: _explain,
-                      ),
-                    ),
-                  ),
-                  SliverPadding(
-                    padding: const EdgeInsets.fromLTRB(32, 24, 32, 40),
-                    sliver: SliverToBoxAdapter(
-                      child: DictionaryResultCard(
-                        isLoading: _viewModel.isLoading,
-                        hasResult: _viewModel.hasResult,
-                        hasError: _viewModel.hasError,
-                        errorMessage: _viewModel.errorMessage,
-                        result: _viewModel.result,
-                        onCopy: _copyResult,
-                        onRetry: _explain,
+                  const Divider(height: 1),
+                  Expanded(
+                    child: Center(
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 760),
+                        child: CustomScrollView(
+                          slivers: [
+                            SliverPadding(
+                              padding: EdgeInsets.fromLTRB(inset, 32, inset, 0),
+                              sliver: SliverToBoxAdapter(
+                                child: QueryPanel(
+                                  controller: _queryController,
+                                  isLoading: _viewModel.isLoading,
+                                  modelLabel: _viewModel.modelLabel,
+                                  onExplain: _explain,
+                                ),
+                              ),
+                            ),
+                            SliverPadding(
+                              padding: EdgeInsets.fromLTRB(
+                                inset,
+                                20,
+                                inset,
+                                36,
+                              ),
+                              sliver: SliverToBoxAdapter(
+                                child: DictionaryResultCard(
+                                  isLoading: _viewModel.isLoading,
+                                  hasResult: _viewModel.hasResult,
+                                  hasError: _viewModel.hasError,
+                                  errorMessage: _viewModel.errorMessage,
+                                  result: _viewModel.result,
+                                  onCopy: _copyResult,
+                                  onRetry: _explain,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
                 ],
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -160,28 +174,40 @@ class DictionaryHeader extends StatelessWidget {
           width: 42,
           height: 42,
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary,
+            color: const Color(0xFF4F46E5),
             borderRadius: BorderRadius.circular(13),
           ),
           child: const Icon(Icons.auto_awesome, color: Colors.white),
         ),
         const SizedBox(width: 12),
         const Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'AI Dictionary',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-              ),
-              Text('理解词义，也理解语境', style: TextStyle(color: Colors.black54)),
-            ],
+          child: Text(
+            'AI Dictionary',
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
           ),
         ),
-        OutlinedButton.icon(
-          onPressed: onLanguagePressed,
-          icon: const Icon(Icons.translate, size: 18),
-          label: Text(languagePair),
+        const SizedBox(width: 8),
+        Flexible(
+          flex: 2,
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton(
+              onPressed: onLanguagePressed,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.translate, size: 16),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(languagePair, overflow: TextOverflow.ellipsis),
+                  ),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.expand_more, size: 16),
+                ],
+              ),
+            ),
+          ),
         ),
         const SizedBox(width: 8),
         IconButton(
