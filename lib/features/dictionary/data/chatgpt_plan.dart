@@ -67,28 +67,60 @@ class ChatGptPlan {
         response.statusCode >= 300 ||
         body == null) {
       final error = body?['error'];
+      final detail = body?['detail'];
       throw _requestError(
         error is Map ? error['code'] : error,
         response.statusCode,
+        requestId:
+            response.headers['x-request-id'] ??
+            response.headers['openai-request-id'],
+        detail: detail is String ? detail : null,
       );
     }
     return body;
   }
 
-  ChatGptPlanException _requestError(Object? code, [int? status]) {
-    if (code == 'subscription_sharing_usage_unavailable') {
-      return const ChatGptPlanException(
-        '当前账号的 ChatGPT 套餐用量不可用，请在 ChatGPT 中检查授权和套餐。',
-      );
-    }
-    if (status == 429 || code == 'subscription_sharing_usage_limit_exceeded') {
-      return const ChatGptPlanException('已达到 ChatGPT 用量限制，请稍后重试或切换模型配置。');
-    }
-    if (status == 401 || code == 'invalid_grant') {
-      return const ChatGptPlanException('ChatGPT 会话已失效，请在模型配置中重新登录。');
-    }
+  ChatGptPlanException _requestError(
+    Object? code,
+    int? status, {
+    String? requestId,
+    String? detail,
+  }) {
+    final regionDetail = detail?.toLowerCase() ?? '';
+    final message = switch (code) {
+      'subscription_sharing_user_not_eligible' =>
+        '所选 ChatGPT 账号或工作区当前无法在此应用使用套餐额度。',
+      'subscription_sharing_usage_unavailable' ||
+      'subscription_sharing_user_unavailable' => '暂时无法检查 ChatGPT 套餐用量，请稍后重试。',
+      'subscription_sharing_usage_limit_exceeded' =>
+        '已达到 ChatGPT 用量限制，请稍后重试或切换模型配置。',
+      'subscription_sharing_route_not_supported' => 'OpenAI 套餐接口不支持此请求路径。',
+      'chatpass_v2_scope_not_authorized' ||
+      'chatpass_v2_invalid_authorization_context' =>
+        'OpenAI 拒绝了此操作的套餐授权，请检查所选账号和应用授权。',
+      'unsupported_country_region_territory' => 'OpenAI 拒绝了当前地区的 API 请求。',
+      'invalid_grant' ||
+      'subscription_sharing_invalid_user' => 'ChatGPT 会话已失效，请在模型配置中重新登录。',
+      _ => switch (status) {
+        401 => 'ChatGPT 会话无法验证，请在模型配置中重新登录。',
+        403
+            when regionDetail.contains('region') ||
+                regionDetail.contains('country') ||
+                regionDetail.contains('territory') =>
+          'OpenAI 拒绝了当前地区的 API 请求。',
+        403 => 'OpenAI 拒绝了此请求。请检查当前账号、工作区或地区是否支持套餐接入。',
+        429 => '已达到 ChatGPT 用量限制，请稍后重试或切换模型配置。',
+        _ => 'ChatGPT 未能完成请求，请重试。',
+      },
+    };
+    final safeId = RegExp(r'^[A-Za-z0-9_-]{1,100}$');
+    final diagnostics = [
+      if (status != null) 'HTTP $status',
+      if (code is String && safeId.hasMatch(code)) code,
+      if (requestId != null && safeId.hasMatch(requestId)) '请求 ID $requestId',
+    ];
     return ChatGptPlanException(
-      status == null ? 'ChatGPT 未能完成请求，请重试。' : 'ChatGPT 请求失败（HTTP $status）。',
+      diagnostics.isEmpty ? message : '$message（${diagnostics.join(' · ')}）',
     );
   }
 
@@ -463,7 +495,7 @@ class ChatGptPlan {
         case 'response.incomplete':
         case 'error':
           final error = (event['response'] as Map?)?['error'] as Map?;
-          throw _requestError(error?['code'] ?? event['code']);
+          throw _requestError(error?['code'] ?? event['code'], null);
       }
     }
     throw const ChatGptPlanException('ChatGPT 响应中断，请重试。');

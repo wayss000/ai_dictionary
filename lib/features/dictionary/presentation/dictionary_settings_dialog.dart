@@ -130,21 +130,26 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       _chatGptModels = {};
       _testMessage = null;
     });
+    var stage = signIn ? '完成 ChatGPT 登录' : '加载 ChatGPT 模型';
     try {
-      final email = signIn
-          ? await ChatGptPlan.instance.signIn(
-              id,
-              cancelled: cancellation!.future,
-            )
-          : _chatGptEmail;
-      if (!mounted) return;
+      if (signIn) {
+        final email = await ChatGptPlan.instance.signIn(
+          id,
+          cancelled: cancellation!.future,
+        );
+        if (!mounted) return;
+        setState(() {
+          _chatGptEmail = email;
+          _loginCancellation = null;
+        });
+        stage = '加载 ChatGPT 模型';
+      }
       final models = await ChatGptPlan.instance.models(id);
       if (models.isEmpty) {
         throw const ChatGptPlanException('这个 ChatGPT 账号没有可用的模型。');
       }
       if (!mounted) return;
       setState(() {
-        _chatGptEmail = email;
         _chatGptModels = models;
         if (!models.containsKey(_modelController.text)) {
           final luna = models.keys.where(
@@ -159,7 +164,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       if (!mounted) return;
       setState(() {
         _testSucceeded = false;
-        _testMessage = error.toString();
+        _testMessage = '$stage 失败。$error';
       });
     } finally {
       _loginCancellation = null;
@@ -485,8 +490,17 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                       : '重新登录 ChatGPT',
                 ),
               ),
+              if (_editingId != null || _chatGptEmail != null)
+                OutlinedButton(
+                  onPressed: _busy ? null : () => _loadChatGptModels(),
+                  child: const Text('重新加载模型'),
+                ),
               if (_isLoadingModels) ...[
-                const Text('正在等待 ChatGPT 登录或加载模型…'),
+                Text(
+                  _loginCancellation != null
+                      ? '正在等待 ChatGPT 登录…'
+                      : '正在加载 ChatGPT 模型…',
+                ),
                 if (_loginCancellation != null)
                   TextButton(
                     onPressed: () {
@@ -503,7 +517,11 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           ),
           const SizedBox(height: 8),
           if (_chatGptModels.isEmpty)
-            const Text('登录并授权套餐用量后，可选择账号可用的模型。')
+            Text(
+              _chatGptEmail == null
+                  ? '登录并授权套餐用量后，可选择账号可用的模型。'
+                  : '已登录 ChatGPT。加载模型后即可选择。',
+            )
           else
             DropdownButtonFormField<String>(
               key: ValueKey(_chatGptModels),
