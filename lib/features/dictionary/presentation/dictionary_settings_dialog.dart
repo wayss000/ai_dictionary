@@ -524,6 +524,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
               controller: _promptContentController,
               maxLines: 8,
               minLines: 4,
+              // 提示词保存按钮的启用状态依赖内容，输入时需要实时刷新。
+              onChanged: (_) => setState(() {}),
               decoration: const InputDecoration(
                 hintText: '支持 {word}（用户输入的单词）和 {language}（语言方向）占位符',
                 border: OutlineInputBorder(),
@@ -852,6 +854,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           controller: controller,
           obscureText: obscureText,
           keyboardType: keyboardType,
+          // 输入时触发重建，让依赖 controller 文本的按钮及时更新启用状态。
+          onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             hintText: hint,
             border: const OutlineInputBorder(),
