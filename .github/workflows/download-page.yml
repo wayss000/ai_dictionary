@@ -1,0 +1,56 @@
+name: Deploy download page
+
+on:
+  workflow_run:
+    workflows: [Build main]
+    branches: [main]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: download-page
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event != 'pull_request' && github.event.workflow_run.head_repository.full_name == github.repository))
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/configure-pages@v5
+      - name: Stage download page
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          mkdir -p site
+          cp docs/index.html docs/style.css docs/download.js site/
+          cp macos/Runner/Assets.xcassets/AppIcon.appiconset/app_icon_256.png site/app-icon.png
+
+          run=$(gh run list --workflow main.yml --branch main --event push --status success \
+            --limit 1 --json databaseId --jq '.[0].databaseId // empty')
+          if [[ -z "$run" ]]; then exit 0; fi
+          if gh run download "$run" --name ai-dictionary-macos --dir site; then
+            size=$(stat -c %s site/ai_dictionary-macos.zip)
+            gh run view "$run" --json headSha,createdAt \
+              --jq "{commit: .headSha[:7], date: .createdAt, size: $size}" > site/build.json
+          fi
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - uses: actions/deploy-pages@v4
+        id: deployment
