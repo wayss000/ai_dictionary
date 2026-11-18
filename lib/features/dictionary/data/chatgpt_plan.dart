@@ -394,16 +394,11 @@ class ChatGptPlan {
     required String instructions,
     required Duration timeout,
   }) async {
-    final token = await _accessToken(id);
     final client = http.Client();
     try {
-      return await _stream(
-        client,
-        token,
-        model,
-        input,
-        instructions,
-      ).timeout(timeout);
+      return await _accessToken(id)
+          .then((token) => _stream(client, token, model, input, instructions))
+          .timeout(timeout);
     } finally {
       client.close();
     }

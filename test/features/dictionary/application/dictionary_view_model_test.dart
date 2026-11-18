@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ai_dictionary/features/dictionary/data/llm_config.dart';
+import 'package:ai_dictionary/features/dictionary/data/llm_service.dart';
 import 'package:ai_dictionary/features/dictionary/data/prompt_store.dart';
 import 'package:ai_dictionary/features/dictionary/application/dictionary_view_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -50,6 +53,42 @@ void main() {
     expect(viewModel.logs, hasLength(1));
     expect(viewModel.logs.first.success, isFalse);
     viewModel.dispose();
+  });
+
+  testWidgets('a stalled translation times out and can be retried', (
+    tester,
+  ) async {
+    final service = _StallingLlmService();
+    final viewModel = DictionaryViewModel(llmService: service);
+    addTearDown(viewModel.dispose);
+    await tester.pump();
+    await viewModel.saveProfile(
+      const LlmConfig(
+        id: 'chatgpt',
+        provider: LlmProvider.chatGpt,
+        model: 'gpt-6-luna',
+        timeoutSeconds: 5,
+      ),
+    );
+
+    final initial = viewModel.explain('transformer');
+    await tester.pump(const Duration(seconds: 4));
+    expect(viewModel.isLoading, isTrue);
+    await tester.pump(const Duration(seconds: 1));
+    await initial;
+
+    expect(viewModel.isLoading, isFalse);
+    expect(viewModel.errorMessage, contains('请求超时（5 秒）'));
+    expect(viewModel.logs.single.success, isFalse);
+
+    await viewModel.explain('translate');
+    expect(service.calls, 2);
+    expect(viewModel.isLoading, isFalse);
+    expect(viewModel.hasResult, isTrue);
+    expect(viewModel.hasError, isFalse);
+    expect(viewModel.result?.term, 'translate');
+    expect(viewModel.logs.map((log) => log.success), [true, false]);
+    await tester.pump();
   });
 
   test('migrates legacy single config into a profile', () async {
@@ -250,4 +289,29 @@ void main() {
 
     viewModel.dispose();
   });
+}
+
+class _StallingLlmService extends LlmService {
+  int calls = 0;
+
+  @override
+  Future<ExplainResponse> explain({
+    required LlmConfig config,
+    required String query,
+    required String systemPrompt,
+  }) async {
+    if (++calls == 1) return Completer<ExplainResponse>().future;
+    return ExplainResponse(
+      result: DictionaryResult(
+        term: query,
+        translation: '翻译',
+        context: '',
+        partOfSpeech: '',
+        examples: const [],
+        model: config.model,
+      ),
+      rawOutput: '',
+      finalPrompt: systemPrompt,
+    );
+  }
 }

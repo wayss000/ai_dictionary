@@ -22,6 +22,7 @@ class DictionaryViewModel extends ChangeNotifier {
   LanguagePairStore _langStore = const LanguagePairStore();
   PromptStore _promptStore = const PromptStore();
   List<LlmCallLog> _logs = [];
+  Future<void> _logWrites = Future<void>.value();
   String _languagePair = defaultLanguagePair;
   bool _isLoading = false;
   bool _hasResult = false;
@@ -99,8 +100,8 @@ class DictionaryViewModel extends ChangeNotifier {
 
   Future<void> clearLogs() async {
     _logs = [];
-    await LlmCallLogStore.save(_logs);
     _notify();
+    await _persistLogs();
   }
 
   /// 切换生效的语言组合并持久化。
@@ -191,34 +192,38 @@ class DictionaryViewModel extends ChangeNotifier {
     notifyListeners();
 
     final word = query.trim();
-    // 实际发送的 user 消息就是单词本身；语言方向与单词已由提示词模板整合进 system 消息。
-    final input = word;
-    final systemPrompt = selectedPrompt.render(
-      word: word,
-      languagePair: _languagePair,
-    );
-    final model = _store.active?.model ?? '未配置';
+    final requestConfig = config;
+    final languagePair = _languagePair;
+    final seconds = requestConfig.effectiveTimeoutSeconds;
+    final model = requestConfig.isConfigured ? requestConfig.model : '未配置';
+    var systemPrompt = '';
     final stopwatch = Stopwatch()..start();
 
     try {
-      final response = await _llmService.explain(
-        config: _store.active ?? const LlmConfig(id: ''),
-        query: word,
-        systemPrompt: systemPrompt,
+      systemPrompt = selectedPrompt.render(
+        word: word,
+        languagePair: languagePair,
       );
+      final response = await _llmService
+          .explain(
+            config: requestConfig,
+            query: word,
+            systemPrompt: systemPrompt,
+          )
+          .timeout(Duration(seconds: seconds));
       stopwatch.stop();
       if (_isDisposed) return;
       _result = response.result;
       _hasResult = true;
-      await _addLog(
+      _addLog(
         LlmCallLog(
           time: DateTime.now(),
           query: word,
-          languagePair: _languagePair,
+          languagePair: languagePair,
           model: model,
           durationMs: stopwatch.elapsedMilliseconds,
           success: true,
-          input: input,
+          input: word,
           systemPrompt: response.finalPrompt,
           output: response.rawOutput,
           promptTokens: response.promptTokens,
@@ -228,27 +233,47 @@ class DictionaryViewModel extends ChangeNotifier {
     } on TimeoutException {
       stopwatch.stop();
       if (_isDisposed) return;
-      final seconds = _store.active?.effectiveTimeoutSeconds ?? 60;
       _hasError = true;
       _errorMessage = '请求超时（$seconds 秒）。可在设置中调大该模型的超时时间，或换用更快的模型。';
-      await _addLog(
-        _errorLog(word, model, stopwatch, '超时（$seconds 秒），请求未完成', systemPrompt),
+      _addLog(
+        _errorLog(
+          word,
+          model,
+          languagePair,
+          stopwatch,
+          '超时（$seconds 秒），请求未完成',
+          systemPrompt,
+        ),
       );
     } on LlmException catch (error) {
       stopwatch.stop();
       if (_isDisposed) return;
       _hasError = true;
       _errorMessage = error.message;
-      await _addLog(
-        _errorLog(word, model, stopwatch, error.message, systemPrompt),
+      _addLog(
+        _errorLog(
+          word,
+          model,
+          languagePair,
+          stopwatch,
+          error.message,
+          systemPrompt,
+        ),
       );
     } catch (error) {
       stopwatch.stop();
       if (_isDisposed) return;
       _hasError = true;
       _errorMessage = '请求出错：$error';
-      await _addLog(
-        _errorLog(word, model, stopwatch, error.toString(), systemPrompt),
+      _addLog(
+        _errorLog(
+          word,
+          model,
+          languagePair,
+          stopwatch,
+          error.toString(),
+          systemPrompt,
+        ),
       );
     } finally {
       if (!_isDisposed) {
@@ -261,6 +286,7 @@ class DictionaryViewModel extends ChangeNotifier {
   LlmCallLog _errorLog(
     String input,
     String model,
+    String languagePair,
     Stopwatch stopwatch,
     String message, [
     String? systemPrompt,
@@ -268,7 +294,7 @@ class DictionaryViewModel extends ChangeNotifier {
     return LlmCallLog(
       time: DateTime.now(),
       query: input,
-      languagePair: _languagePair,
+      languagePair: languagePair,
       model: model,
       durationMs: stopwatch.elapsedMilliseconds,
       success: false,
@@ -278,13 +304,24 @@ class DictionaryViewModel extends ChangeNotifier {
     );
   }
 
-  Future<void> _addLog(LlmCallLog log) async {
+  void _addLog(LlmCallLog log) {
     _logs = [log, ..._logs];
     if (_logs.length > LlmCallLogStore.limit) {
       _logs = _logs.sublist(0, LlmCallLogStore.limit);
     }
-    await LlmCallLogStore.save(_logs);
-    _notify();
+    unawaited(_persistLogs());
+  }
+
+  Future<void> _persistLogs() {
+    final snapshot = _logs;
+    _logWrites = _logWrites.then((_) async {
+      try {
+        await LlmCallLogStore.save(snapshot);
+      } catch (_) {
+        debugPrint('无法保存调用日志。');
+      }
+    });
+    return _logWrites;
   }
 
   void _notify() {
