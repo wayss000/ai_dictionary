@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../application/dictionary_view_model.dart';
 import '../data/llm_call_log.dart';
+import '../data/chatgpt_plan.dart';
 import '../data/llm_config.dart';
 import '../data/llm_service.dart';
 import '../data/prompt_store.dart';
@@ -14,7 +17,8 @@ Future<void> showDictionarySettingsDialog(
 }) {
   return showDialog<void>(
     context: context,
-    builder: (context) => _SettingsPanel(viewModel: viewModel, initialTab: initialTab),
+    builder: (context) =>
+        _SettingsPanel(viewModel: viewModel, initialTab: initialTab),
   );
 }
 
@@ -30,6 +34,24 @@ class _SettingsPanel extends StatefulWidget {
 
 class _SettingsPanelState extends State<_SettingsPanel> {
   String? _editingId;
+  LlmProvider _provider = LlmProvider.custom;
+  String? _draftChatGptId;
+  Map<String, String> _chatGptModels = {};
+  String? _chatGptEmail;
+  bool _isLoadingModels = false;
+  bool _isSaving = false;
+  Completer<void>? _loginCancellation;
+
+  bool get _busy => _isTesting || _isLoadingModels || _isSaving;
+
+  void _discardDraft() {
+    final id = _draftChatGptId;
+    _draftChatGptId = null;
+    if (id != null) {
+      unawaited(ChatGptPlan.instance.disconnect(id).catchError((Object _) {}));
+    }
+  }
+
   String? _editingPromptId;
   late int _selectedTab = widget.initialTab;
   final _nameController = TextEditingController();
@@ -48,6 +70,11 @@ class _SettingsPanelState extends State<_SettingsPanel> {
 
   @override
   void dispose() {
+    final cancellation = _loginCancellation;
+    if (cancellation != null && !cancellation.isCompleted) {
+      cancellation.complete();
+    }
+    if (!_isSaving && !_isLoadingModels) _discardDraft();
     _nameController.dispose();
     _baseUrlController.dispose();
     _apiKeyController.dispose();
@@ -60,8 +87,12 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   }
 
   void _startEdit(LlmConfig profile) {
+    _discardDraft();
     setState(() {
       _editingId = profile.id;
+      _provider = profile.provider;
+      _chatGptModels = {};
+      _chatGptEmail = null;
       _nameController.text = profile.name;
       _baseUrlController.text = profile.baseUrl;
       _apiKeyController.text = profile.apiKey;
@@ -69,11 +100,18 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       _timeoutController.text = profile.timeoutSeconds.toString();
       _testMessage = null;
     });
+    if (profile.provider == LlmProvider.chatGpt) {
+      unawaited(_loadChatGptModels());
+    }
   }
 
   void _resetForm() {
+    _discardDraft();
     setState(() {
       _editingId = null;
+      _provider = LlmProvider.custom;
+      _chatGptModels = {};
+      _chatGptEmail = null;
       _nameController.clear();
       _baseUrlController.clear();
       _apiKeyController.clear();
@@ -83,19 +121,73 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     });
   }
 
+  Future<void> _loadChatGptModels({bool signIn = false}) async {
+    final id = _editingId ?? (_draftChatGptId ??= LlmConfigStore.newId());
+    final cancellation = signIn ? Completer<void>() : null;
+    _loginCancellation = cancellation;
+    setState(() {
+      _isLoadingModels = true;
+      _chatGptModels = {};
+      _testMessage = null;
+    });
+    try {
+      final email = signIn
+          ? await ChatGptPlan.instance.signIn(
+              id,
+              cancelled: cancellation!.future,
+            )
+          : _chatGptEmail;
+      if (!mounted) return;
+      final models = await ChatGptPlan.instance.models(id);
+      if (models.isEmpty) {
+        throw const ChatGptPlanException('这个 ChatGPT 账号没有可用的模型。');
+      }
+      if (!mounted) return;
+      setState(() {
+        _chatGptEmail = email;
+        _chatGptModels = models;
+        if (!models.containsKey(_modelController.text)) {
+          final luna = models.keys.where(
+            (model) => model.toLowerCase().contains('luna'),
+          );
+          _modelController.text = _editingId == null
+              ? luna.firstOrNull ?? models.keys.first
+              : '';
+        }
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _testSucceeded = false;
+        _testMessage = error.toString();
+      });
+    } finally {
+      _loginCancellation = null;
+      if (mounted) {
+        setState(() => _isLoadingModels = false);
+      } else {
+        _discardDraft();
+      }
+    }
+  }
+
   bool get _canSave =>
-      _apiKeyController.text.trim().isNotEmpty &&
-      _modelController.text.trim().isNotEmpty;
+      _modelController.text.trim().isNotEmpty &&
+      (_provider == LlmProvider.chatGpt
+          ? _chatGptModels.containsKey(_modelController.text)
+          : _apiKeyController.text.trim().isNotEmpty);
 
   LlmConfig _buildConfig() => LlmConfig(
-        id: _editingId ?? LlmConfigStore.newId(),
-        name: _nameController.text,
-        baseUrl: _baseUrlController.text,
-        apiKey: _apiKeyController.text,
-        model: _modelController.text,
-        timeoutSeconds:
-            int.tryParse(_timeoutController.text) ?? LlmConfig.defaultTimeoutSeconds,
-      );
+    id: _editingId ?? _draftChatGptId ?? LlmConfigStore.newId(),
+    provider: _provider,
+    name: _nameController.text,
+    baseUrl: _baseUrlController.text,
+    apiKey: _provider == LlmProvider.custom ? _apiKeyController.text : '',
+    model: _modelController.text,
+    timeoutSeconds:
+        int.tryParse(_timeoutController.text) ??
+        LlmConfig.defaultTimeoutSeconds,
+  );
 
   Future<void> _testConnection() async {
     setState(() {
@@ -103,12 +195,19 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       _testMessage = null;
     });
     try {
-      await LlmService().testConnection(_buildConfig());
+      final service = LlmService();
+      try {
+        await service.testConnection(_buildConfig());
+      } finally {
+        service.dispose();
+      }
+      if (!mounted) return;
       setState(() {
         _testSucceeded = true;
         _testMessage = '连接成功，配置可用。';
       });
     } catch (error) {
+      if (!mounted) return;
       setState(() {
         _testSucceeded = false;
         _testMessage = error.toString();
@@ -119,19 +218,50 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   }
 
   Future<void> _save() async {
-    await widget.viewModel.saveProfile(_buildConfig());
-    if (!mounted) return;
-    _resetForm();
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('已保存并生效')));
+    setState(() => _isSaving = true);
+    try {
+      await widget.viewModel.saveProfile(_buildConfig());
+      _draftChatGptId = null;
+      if (!mounted) return;
+      _resetForm();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('已保存并生效')));
+    } catch (error) {
+      if (!mounted) {
+        _discardDraft();
+        return;
+      }
+      setState(() {
+        _testSucceeded = false;
+        _testMessage = error.toString();
+      });
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   Future<void> _delete(LlmConfig profile) async {
-    await widget.viewModel.deleteProfile(profile.id);
-    if (!mounted) return;
-    if (_editingId == profile.id) _resetForm();
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('已删除 ${profile.displayName}')));
+    setState(() => _isSaving = true);
+    try {
+      if (profile.provider == LlmProvider.chatGpt) {
+        await ChatGptPlan.instance.disconnect(profile.id);
+      }
+      await widget.viewModel.deleteProfile(profile.id);
+      if (!mounted) return;
+      if (_editingId == profile.id) _resetForm();
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('已删除 ${profile.displayName}')));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _testSucceeded = false;
+        _testMessage = error.toString();
+      });
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   String _formatTime(DateTime time) {
@@ -246,15 +376,18 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        Text('已保存的模型（点选切换生效）',
-            style:
-                theme.textTheme.bodySmall?.copyWith(color: Colors.black54)),
+        Text(
+          '已保存的模型（点选切换生效）',
+          style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
+        ),
         const SizedBox(height: 4),
         if (viewModel.profiles.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 12),
-            child: Text('还没有配置，在下方新增一个模型配置。',
-                style: TextStyle(color: Colors.black38)),
+            child: Text(
+              '还没有配置，在下方新增一个模型配置。',
+              style: TextStyle(color: Colors.black38),
+            ),
           )
         else
           RadioGroup<String>(
@@ -275,49 +408,128 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
+        if (_editingId == null) ...[
+          SegmentedButton<LlmProvider>(
+            segments: const [
+              ButtonSegment(value: LlmProvider.custom, label: Text('自定义模型')),
+              ButtonSegment(
+                value: LlmProvider.chatGpt,
+                label: Text('登录 ChatGPT'),
+              ),
+            ],
+            selected: {_provider},
+            onSelectionChanged: _busy
+                ? null
+                : (selection) {
+                    _resetForm();
+                    setState(() => _provider = selection.single);
+                  },
+          ),
+          const SizedBox(height: 12),
+        ],
         _buildField(
           label: '名称（选填）',
           hint: '例如 智谱 / 硅基流动',
           controller: _nameController,
         ),
         const SizedBox(height: 10),
-        _buildField(
-          label: 'API 地址',
-          hint: '例如 https://api.openai.com/v1',
-          controller: _baseUrlController,
-        ),
-        const SizedBox(height: 10),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildField(
-                label: 'API Key',
-                hint: 'sk-...',
-                controller: _apiKeyController,
-                obscureText: _obscureApiKey,
+        if (_provider == LlmProvider.custom) ...[
+          _buildField(
+            label: 'API 地址',
+            hint: '例如 https://api.openai.com/v1',
+            controller: _baseUrlController,
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: _buildField(
+                  label: 'API Key',
+                  hint: 'sk-...',
+                  controller: _apiKeyController,
+                  obscureText: _obscureApiKey,
+                ),
               ),
-            ),
-            IconButton(
-              onPressed: () =>
-                  setState(() => _obscureApiKey = !_obscureApiKey),
-              icon: Icon(
-                _obscureApiKey
-                    ? Icons.visibility_outlined
-                    : Icons.visibility_off_outlined,
-                size: 20,
+              IconButton(
+                onPressed: () =>
+                    setState(() => _obscureApiKey = !_obscureApiKey),
+                icon: Icon(
+                  _obscureApiKey
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                  size: 20,
+                ),
+                tooltip: _obscureApiKey ? '显示' : '隐藏',
               ),
-              tooltip: _obscureApiKey ? '显示' : '隐藏',
+            ],
+          ),
+          const SizedBox(height: 10),
+          _buildField(
+            label: '模型名称',
+            hint: '例如 glm-4-flash、Qwen/Qwen3.5-4B',
+            controller: _modelController,
+          ),
+          const SizedBox(height: 10),
+        ] else ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              OutlinedButton(
+                onPressed: _busy
+                    ? null
+                    : () => _loadChatGptModels(signIn: true),
+                child: Text(
+                  _editingId == null && _chatGptEmail == null
+                      ? '使用 ChatGPT 继续'
+                      : '重新登录 ChatGPT',
+                ),
+              ),
+              if (_isLoadingModels) ...[
+                const Text('正在等待 ChatGPT 登录或加载模型…'),
+                if (_loginCancellation != null)
+                  TextButton(
+                    onPressed: () {
+                      final cancellation = _loginCancellation;
+                      if (cancellation != null && !cancellation.isCompleted) {
+                        cancellation.complete();
+                      }
+                    },
+                    child: const Text('取消登录'),
+                  ),
+              ] else if (_chatGptEmail != null)
+                Text(_chatGptEmail!),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (_chatGptModels.isEmpty)
+            const Text('登录并授权套餐用量后，可选择账号可用的模型。')
+          else
+            DropdownButtonFormField<String>(
+              key: ValueKey(_chatGptModels),
+              isExpanded: true,
+              initialValue: _chatGptModels.containsKey(_modelController.text)
+                  ? _modelController.text
+                  : null,
+              decoration: const InputDecoration(labelText: 'ChatGPT 模型'),
+              items: [
+                for (final entry in _chatGptModels.entries)
+                  DropdownMenuItem(
+                    value: entry.key,
+                    child: Text(entry.value, overflow: TextOverflow.ellipsis),
+                  ),
+              ],
+              onChanged: _busy
+                  ? null
+                  : (model) => setState(() {
+                      _modelController.text = model ?? '';
+                      _testMessage = null;
+                    }),
             ),
-          ],
-        ),
-        const SizedBox(height: 10),
-        _buildField(
-          label: '模型名称',
-          hint: '例如 glm-4-flash、Qwen/Qwen3.5-4B',
-          controller: _modelController,
-        ),
-        const SizedBox(height: 10),
+          const SizedBox(height: 10),
+        ],
         _buildField(
           label: '超时时间（秒）',
           hint: '默认 60，最小 5',
@@ -339,8 +551,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                   _testMessage!,
                   style: TextStyle(
                     fontSize: 13,
-                    color:
-                        _testSucceeded ? Colors.green : theme.colorScheme.error,
+                    color: _testSucceeded
+                        ? Colors.green
+                        : theme.colorScheme.error,
                   ),
                 ),
               ),
@@ -351,7 +564,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         Row(
           children: [
             OutlinedButton.icon(
-              onPressed: _isTesting || !_canSave ? null : _testConnection,
+              onPressed: _busy || !_canSave ? null : _testConnection,
               icon: _isTesting
                   ? const SizedBox(
                       width: 14,
@@ -364,12 +577,12 @@ class _SettingsPanelState extends State<_SettingsPanel> {
             const Spacer(),
             if (_editingId != null)
               TextButton(
-                onPressed: _resetForm,
+                onPressed: _busy ? null : _resetForm,
                 child: const Text('取消编辑'),
               ),
             const SizedBox(width: 4),
             FilledButton.icon(
-              onPressed: _isTesting || !_canSave ? null : _save,
+              onPressed: _busy || !_canSave ? null : _save,
               icon: const Icon(Icons.check, size: 16),
               label: Text(_editingId == null ? '保存并生效' : '保存修改'),
             ),
@@ -377,7 +590,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         ),
         const SizedBox(height: 4),
         Text(
-          'API Key 仅保存在本机（shared_preferences），不会上传。',
+          _provider == LlmProvider.chatGpt
+              ? '使用当前 ChatGPT 账号的套餐用量。'
+              : 'API Key 保存在本机，用于请求所配置的服务。',
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black45),
         ),
       ],
@@ -697,13 +912,15 @@ class _SettingsPanelState extends State<_SettingsPanel> {
             const SizedBox(width: 6),
             const Icon(Icons.check_circle, size: 16, color: Colors.green),
             const SizedBox(width: 4),
-            const Text('生效中',
-                style: TextStyle(fontSize: 12, color: Colors.green)),
+            const Text(
+              '生效中',
+              style: TextStyle(fontSize: 12, color: Colors.green),
+            ),
           ],
         ],
       ),
       subtitle: Text(
-        '${profile.model} · ${profile.baseUrl}',
+        '${profile.model} · ${profile.provider == LlmProvider.chatGpt ? 'ChatGPT 套餐' : profile.baseUrl}',
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 12),
       ),
@@ -711,14 +928,17 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            onPressed: () => _startEdit(profile),
+            onPressed: _busy ? null : () => _startEdit(profile),
             icon: const Icon(Icons.edit_outlined, size: 18),
             tooltip: '编辑',
           ),
           IconButton(
-            onPressed: () => _delete(profile),
-            icon: Icon(Icons.delete_outline,
-                size: 18, color: theme.colorScheme.error),
+            onPressed: _busy ? null : () => _delete(profile),
+            icon: Icon(
+              Icons.delete_outline,
+              size: 18,
+              color: theme.colorScheme.error,
+            ),
             tooltip: '删除',
           ),
         ],

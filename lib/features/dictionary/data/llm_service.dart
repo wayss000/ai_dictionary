@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import 'chatgpt_plan.dart';
 import 'llm_config.dart';
 
 /// 词典查询结果。
@@ -79,6 +80,23 @@ class LlmService {
       throw LlmException('尚未配置模型，请点击右上角设置填写 API 地址、API Key 和模型名称。');
     }
 
+    if (config.provider == LlmProvider.chatGpt) {
+      final response = await ChatGptPlan.instance.infer(
+        id: config.id,
+        model: config.model,
+        input: query,
+        instructions: systemPrompt,
+        timeout: Duration(seconds: config.effectiveTimeoutSeconds),
+      );
+      return ExplainResponse(
+        result: _parseResult(response.text, config.model),
+        rawOutput: response.text,
+        finalPrompt: systemPrompt,
+        promptTokens: response.inputTokens,
+        completionTokens: response.outputTokens,
+      );
+    }
+
     final endpoint = _chatEndpoint(config.baseUrl);
     final timeout = Duration(seconds: config.effectiveTimeoutSeconds);
     final response = await _client
@@ -101,16 +119,20 @@ class LlmService {
         .timeout(timeout);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw LlmException('请求失败（HTTP ${response.statusCode}）：${_briefError(response.body)}');
+      throw LlmException(
+        '请求失败（HTTP ${response.statusCode}）：${_briefError(response.body)}',
+      );
     }
 
-    final data = jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
+    final data =
+        jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
     final choices = data['choices'] as List?;
     if (choices == null || choices.isEmpty) {
       throw LlmException('模型未返回任何结果。');
     }
     final content =
-        ((choices.first as Map<String, dynamic>)['message'] as Map<String, dynamic>)['content']
+        ((choices.first as Map<String, dynamic>)['message']
+                as Map<String, dynamic>)['content']
             as String? ??
         '';
 
@@ -136,6 +158,16 @@ class LlmService {
     if (!config.isConfigured) {
       throw LlmException('请先填写 API Key 和模型名称。');
     }
+    if (config.provider == LlmProvider.chatGpt) {
+      await ChatGptPlan.instance.infer(
+        id: config.id,
+        model: config.model,
+        input: 'Reply with OK.',
+        instructions: 'Keep your reply brief.',
+        timeout: Duration(seconds: config.effectiveTimeoutSeconds),
+      );
+      return;
+    }
     final endpoint = _chatEndpoint(config.baseUrl);
     final response = await _client
         .post(
@@ -154,7 +186,9 @@ class LlmService {
         )
         .timeout(Duration(seconds: config.effectiveTimeoutSeconds));
     if (response.statusCode < 200 || response.statusCode >= 300) {
-      throw LlmException('连接失败（HTTP ${response.statusCode}）：${_briefError(response.body)}');
+      throw LlmException(
+        '连接失败（HTTP ${response.statusCode}）：${_briefError(response.body)}',
+      );
     }
   }
 

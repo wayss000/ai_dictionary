@@ -2,10 +2,13 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// 一个大模型配置档案（OpenAI 兼容接口）。
+enum LlmProvider { custom, chatGpt }
+
+/// 一个大模型配置档案。
 class LlmConfig {
   const LlmConfig({
     required this.id,
+    this.provider = LlmProvider.custom,
     this.name = '',
     this.baseUrl = defaultBaseUrl,
     this.apiKey = '',
@@ -18,6 +21,7 @@ class LlmConfig {
   static const defaultTimeoutSeconds = 60;
 
   final String id;
+  final LlmProvider provider;
   final String name;
   final String baseUrl;
   final String apiKey;
@@ -29,7 +33,9 @@ class LlmConfig {
   /// 实际生效的超时时间，最小 5 秒。
   int get effectiveTimeoutSeconds => timeoutSeconds < 5 ? 5 : timeoutSeconds;
 
-  bool get isConfigured => apiKey.trim().isNotEmpty && model.trim().isNotEmpty;
+  bool get isConfigured =>
+      model.trim().isNotEmpty &&
+      (provider == LlmProvider.chatGpt || apiKey.trim().isNotEmpty);
 
   /// 展示名：未填 name 时用模型名。
   String get displayName => name.trim().isNotEmpty ? name.trim() : model.trim();
@@ -44,6 +50,7 @@ class LlmConfig {
   }) {
     return LlmConfig(
       id: id ?? this.id,
+      provider: provider,
       name: (name ?? this.name).trim(),
       baseUrl: (baseUrl ?? this.baseUrl).trim(),
       apiKey: (apiKey ?? this.apiKey).trim(),
@@ -53,22 +60,26 @@ class LlmConfig {
   }
 
   Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'baseUrl': baseUrl,
-        'apiKey': apiKey,
-        'model': model,
-        'timeoutSeconds': timeoutSeconds,
-      };
+    'id': id,
+    'provider': provider.name,
+    'name': name,
+    'baseUrl': baseUrl,
+    'apiKey': apiKey,
+    'model': model,
+    'timeoutSeconds': timeoutSeconds,
+  };
 
   factory LlmConfig.fromJson(Map<String, dynamic> json) => LlmConfig(
-        id: json['id'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        baseUrl: json['baseUrl'] as String? ?? defaultBaseUrl,
-        apiKey: json['apiKey'] as String? ?? '',
-        model: json['model'] as String? ?? defaultModel,
-        timeoutSeconds: json['timeoutSeconds'] as int? ?? defaultTimeoutSeconds,
-      );
+    id: json['id'] as String? ?? '',
+    provider: json['provider'] == LlmProvider.chatGpt.name
+        ? LlmProvider.chatGpt
+        : LlmProvider.custom,
+    name: json['name'] as String? ?? '',
+    baseUrl: json['baseUrl'] as String? ?? defaultBaseUrl,
+    apiKey: json['apiKey'] as String? ?? '',
+    model: json['model'] as String? ?? defaultModel,
+    timeoutSeconds: json['timeoutSeconds'] as int? ?? defaultTimeoutSeconds,
+  );
 }
 
 /// 多模型配置仓库：保存全部配置档案 + 当前生效的档案 id。
