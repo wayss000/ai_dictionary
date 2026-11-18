@@ -8,6 +8,13 @@ on:
     branches:
       - main
 
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (for example, v1.0.0)'
+        required: true
+        type: string
+
 permissions:
   contents: read
 
@@ -17,6 +24,17 @@ jobs:
     runs-on: macos-latest
 
     steps:
+      - name: Validate release input
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF" != refs/heads/main || ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Select main and enter a release version such as v1.0.0."
+            exit 1
+          fi
+
       - name: Check out repository
         uses: actions/checkout@v4
 
@@ -40,7 +58,15 @@ jobs:
         run: flutter test --reporter expanded
 
       - name: Build macOS release
-        run: flutter build macos --release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.version }}
+        run: |
+          args=()
+          if [[ -n "$RELEASE_TAG" ]]; then
+            args+=(--build-name "${RELEASE_TAG#v}")
+          fi
+          flutter build macos --release "${args[@]}"
 
       - name: Package application
         run: |
@@ -55,3 +81,34 @@ jobs:
           path: build/ai_dictionary-macos.zip
           if-no-files-found: error
           retention-days: 14
+
+  publish-release:
+    name: Publish GitHub Release
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    needs: verify-and-build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download macOS package
+        uses: actions/download-artifact@v4
+        with:
+          name: ai-dictionary-macos
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.version }}
+        run: |
+          if git ls-remote --exit-code --refs "https://github.com/$GH_REPO.git" "refs/tags/$RELEASE_TAG"; then
+            echo "::error::The tag $RELEASE_TAG already exists."
+            exit 1
+          else
+            result=$?
+            if [[ "$result" != 2 ]]; then exit "$result"; fi
+          fi
+          gh release create "$RELEASE_TAG" ai_dictionary-macos.zip \
+            --target "$GITHUB_SHA" --title "AI Dictionary $RELEASE_TAG" --generate-notes
