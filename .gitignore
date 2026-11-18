@@ -8,6 +8,10 @@
 .history
 .workbuddy/
 
+# macOS / 本机生成的垃圾文件
+.DS_Store
+.config
+
 
 
 # Flutter repo-specific
