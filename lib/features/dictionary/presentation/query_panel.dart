@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class QueryPanel extends StatelessWidget {
   const QueryPanel({
     required this.controller,
     required this.isLoading,
+    required this.modelLabel,
     required this.onExplain,
     super.key,
   });
 
   final TextEditingController controller;
   final bool isLoading;
+  final String modelLabel;
   final VoidCallback onExplain;
 
   @override
@@ -22,23 +25,44 @@ class QueryPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TextField(
-              controller: controller,
-              minLines: 3,
-              maxLines: 6,
-              textInputAction: TextInputAction.newline,
-              decoration: const InputDecoration(
-                hintText: '输入单词、短语或句子',
-                hintStyle: TextStyle(color: Colors.black38),
+            Shortcuts(
+              // 回车键触发"解释"，Shift + 回车保留换行。
+              shortcuts: {
+                SingleActivator(LogicalKeyboardKey.enter): const _ExplainIntent(),
+              },
+              child: Actions(
+                actions: {
+                  _ExplainIntent: CallbackAction<_ExplainIntent>(
+                    onInvoke: (_) {
+                      onExplain();
+                      return null;
+                    },
+                  ),
+                },
+                child: TextField(
+                  controller: controller,
+                  minLines: 3,
+                  maxLines: 6,
+                  textInputAction: TextInputAction.newline,
+                  decoration: const InputDecoration(
+                    hintText: '输入单词、短语或句子（按回车解释，Shift+回车换行）',
+                    hintStyle: TextStyle(color: Colors.black38),
+                  ),
+                ),
               ),
-              onSubmitted: (_) => onExplain(),
             ),
             const SizedBox(height: 12),
             Row(
               children: [
                 const Icon(Icons.auto_awesome, size: 16, color: Colors.black45),
                 const SizedBox(width: 6),
-                const Text('默认模型', style: TextStyle(color: Colors.black54)),
+                Flexible(
+                  child: Text(
+                    modelLabel,
+                    style: const TextStyle(color: Colors.black54),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
                 const Spacer(),
                 FilledButton.icon(
                   onPressed: isLoading ? null : onExplain,
@@ -58,4 +82,8 @@ class QueryPanel extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ExplainIntent extends Intent {
+  const _ExplainIntent();
 }

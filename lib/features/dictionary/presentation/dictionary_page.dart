@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../application/dictionary_view_model.dart';
+import '../data/llm_service.dart';
 import 'dictionary_result_card.dart';
 import 'dictionary_settings_dialog.dart';
 import 'language_picker.dart';
@@ -31,10 +32,27 @@ class _DictionaryPageState extends State<DictionaryPage> {
     super.dispose();
   }
 
+  String _resultToPlainText(DictionaryResult result) {
+    final buffer = StringBuffer()
+      ..writeln('${result.term}：${result.translation}');
+    if (result.context.isNotEmpty) {
+      buffer.writeln('当前语境：${result.context}');
+    }
+    if (result.partOfSpeech.isNotEmpty) {
+      buffer.writeln('词性：${result.partOfSpeech}');
+    }
+    for (final example in result.examples) {
+      buffer
+        ..writeln(example.original)
+        ..writeln(example.translated);
+    }
+    return buffer.toString().trim();
+  }
+
   Future<void> _copyResult() async {
-    await Clipboard.setData(
-      const ClipboardData(text: 'Transformer：变换器；转换器；在 AI 语境中通常指一种神经网络架构。'),
-    );
+    final result = _viewModel.result;
+    if (result == null) return;
+    await Clipboard.setData(ClipboardData(text: _resultToPlainText(result)));
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -50,8 +68,14 @@ class _DictionaryPageState extends State<DictionaryPage> {
   }
 
   Future<void> _openSettings() {
-    return showDictionarySettingsDialog(context);
+    return showDictionarySettingsDialog(
+      context,
+      initialConfig: _viewModel.config,
+      onSave: _viewModel.updateConfig,
+    );
   }
+
+  void _explain() => _viewModel.explain(_queryController.text);
 
   @override
   Widget build(BuildContext context) {
@@ -81,8 +105,8 @@ class _DictionaryPageState extends State<DictionaryPage> {
                       child: QueryPanel(
                         controller: _queryController,
                         isLoading: _viewModel.isLoading,
-                        onExplain: () =>
-                            _viewModel.explain(_queryController.text),
+                        modelLabel: _viewModel.modelLabel,
+                        onExplain: _explain,
                       ),
                     ),
                   ),
@@ -92,9 +116,11 @@ class _DictionaryPageState extends State<DictionaryPage> {
                       child: DictionaryResultCard(
                         isLoading: _viewModel.isLoading,
                         hasResult: _viewModel.hasResult,
+                        hasError: _viewModel.hasError,
+                        errorMessage: _viewModel.errorMessage,
+                        result: _viewModel.result,
                         onCopy: _copyResult,
-                        onRetry: () =>
-                            _viewModel.explain(_queryController.text),
+                        onRetry: _explain,
                       ),
                     ),
                   ),
