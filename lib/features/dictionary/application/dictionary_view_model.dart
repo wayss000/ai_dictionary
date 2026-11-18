@@ -6,6 +6,7 @@ import '../data/llm_call_log.dart';
 import '../data/llm_config.dart';
 import '../data/llm_service.dart';
 import '../data/language_pair_store.dart';
+import '../data/prompt_store.dart';
 
 class DictionaryViewModel extends ChangeNotifier {
   DictionaryViewModel({LlmService? llmService})
@@ -19,6 +20,7 @@ class DictionaryViewModel extends ChangeNotifier {
 
   LlmConfigStore _store = const LlmConfigStore();
   LanguagePairStore _langStore = const LanguagePairStore();
+  PromptStore _promptStore = const PromptStore();
   List<LlmCallLog> _logs = [];
   String _languagePair = defaultLanguagePair;
   bool _isLoading = false;
@@ -32,6 +34,8 @@ class DictionaryViewModel extends ChangeNotifier {
   List<LlmConfig> get profiles => _store.profiles;
   String? get activeProfileId => _store.activeId;
   List<String> get languagePairs => _langStore.pairs;
+  List<PromptTemplate> get promptTemplates => _promptStore.templates;
+  PromptTemplate get selectedPrompt => _promptStore.selected;
   List<LlmCallLog> get logs => List.unmodifiable(_logs);
   String get languagePair => _languagePair;
   bool get isLoading => _isLoading;
@@ -51,6 +55,7 @@ class DictionaryViewModel extends ChangeNotifier {
     _store = await LlmConfigStore.load();
     _langStore = await LanguagePairStore.load();
     _languagePair = _langStore.selected;
+    _promptStore = await PromptStore.load();
     _logs = await LlmCallLogStore.load();
     _notify();
   }
@@ -130,6 +135,48 @@ class DictionaryViewModel extends ChangeNotifier {
     _notify();
   }
 
+  /// 新增或更新一个提示词模板；新增的模板自动设为生效。
+  Future<void> savePrompt(PromptTemplate template) async {
+    final templates = [..._promptStore.templates];
+    var selectedId = _promptStore.selectedId;
+    final index = templates.indexWhere((t) => t.id == template.id);
+    if (index >= 0) {
+      templates[index] = template;
+    } else {
+      templates.add(template);
+      selectedId = template.id;
+    }
+    _promptStore = _promptStore.copyWith(templates: templates, selectedId: selectedId);
+    await _promptStore.save();
+    _notify();
+  }
+
+  /// 切换生效的提示词模板。
+  Future<void> selectPrompt(String id) async {
+    if (_promptStore.selectedId == id) return;
+    if (!_promptStore.templates.any((t) => t.id == id)) return;
+    _promptStore = _promptStore.copyWith(selectedId: id);
+    await _promptStore.save();
+    _notify();
+  }
+
+  /// 删除一个提示词模板；若删除的是生效模板则切到第一个剩余模板。至少保留一个。
+  Future<void> deletePrompt(String id) async {
+    if (_promptStore.templates.length <= 1) return;
+    if (!_promptStore.templates.any((t) => t.id == id)) return;
+    final templates = [..._promptStore.templates]..removeWhere((t) => t.id == id);
+    var selectedId = _promptStore.selectedId;
+    if (selectedId == id) selectedId = templates.first.id;
+    _promptStore = PromptStore(templates: templates, selectedId: selectedId);
+    await _promptStore.save();
+    _notify();
+  }
+
+  /// 将默认模板恢复为内置内容（仅在编辑默认模板时使用）。
+  Future<void> restoreDefaultPrompt() async {
+    await savePrompt(PromptStore.defaultTemplate);
+  }
+
   Future<void> explain(String query) async {
     if (query.trim().isEmpty || _isLoading) return;
 
@@ -139,15 +186,19 @@ class DictionaryViewModel extends ChangeNotifier {
     _errorMessage = null;
     notifyListeners();
 
-    final input = '语言方向：$_languagePair\n待解释内容：${query.trim()}';
+    final word = query.trim();
+    // 实际发送的 user 消息就是单词本身；语言方向与单词已由提示词模板整合进 system 消息。
+    final input = word;
+    final systemPrompt =
+        selectedPrompt.render(word: word, languagePair: _languagePair);
     final model = _store.active?.model ?? '未配置';
     final stopwatch = Stopwatch()..start();
 
     try {
       final response = await _llmService.explain(
         config: _store.active ?? const LlmConfig(id: ''),
-        query: query.trim(),
-        languagePair: _languagePair,
+        query: word,
+        systemPrompt: systemPrompt,
       );
       stopwatch.stop();
       if (_isDisposed) return;
@@ -156,12 +207,13 @@ class DictionaryViewModel extends ChangeNotifier {
       await _addLog(
         LlmCallLog(
           time: DateTime.now(),
-          query: query.trim(),
+          query: word,
           languagePair: _languagePair,
           model: model,
           durationMs: stopwatch.elapsedMilliseconds,
           success: true,
           input: input,
+          systemPrompt: response.finalPrompt,
           output: response.rawOutput,
           promptTokens: response.promptTokens,
           completionTokens: response.completionTokens,
@@ -173,19 +225,19 @@ class DictionaryViewModel extends ChangeNotifier {
       final seconds = _store.active?.effectiveTimeoutSeconds ?? 60;
       _hasError = true;
       _errorMessage = '请求超时（$seconds 秒）。可在设置中调大该模型的超时时间，或换用更快的模型。';
-      await _addLog(_errorLog(query.trim(), model, stopwatch, '超时（$seconds 秒），请求未完成'));
+      await _addLog(_errorLog(word, model, stopwatch, '超时（$seconds 秒），请求未完成', systemPrompt));
     } on LlmException catch (error) {
       stopwatch.stop();
       if (_isDisposed) return;
       _hasError = true;
       _errorMessage = error.message;
-      await _addLog(_errorLog(query.trim(), model, stopwatch, error.message));
+      await _addLog(_errorLog(word, model, stopwatch, error.message, systemPrompt));
     } catch (error) {
       stopwatch.stop();
       if (_isDisposed) return;
       _hasError = true;
       _errorMessage = '请求出错：$error';
-      await _addLog(_errorLog(query.trim(), model, stopwatch, error.toString()));
+      await _addLog(_errorLog(word, model, stopwatch, error.toString(), systemPrompt));
     } finally {
       if (!_isDisposed) {
         _isLoading = false;
@@ -195,7 +247,8 @@ class DictionaryViewModel extends ChangeNotifier {
   }
 
   LlmCallLog _errorLog(
-      String input, String model, Stopwatch stopwatch, String message) {
+      String input, String model, Stopwatch stopwatch, String message,
+      [String? systemPrompt]) {
     return LlmCallLog(
       time: DateTime.now(),
       query: input,
@@ -204,6 +257,7 @@ class DictionaryViewModel extends ChangeNotifier {
       durationMs: stopwatch.elapsedMilliseconds,
       success: false,
       input: input,
+      systemPrompt: systemPrompt,
       output: message,
     );
   }

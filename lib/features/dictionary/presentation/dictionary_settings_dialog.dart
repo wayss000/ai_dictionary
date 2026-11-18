@@ -4,8 +4,9 @@ import '../application/dictionary_view_model.dart';
 import '../data/llm_call_log.dart';
 import '../data/llm_config.dart';
 import '../data/llm_service.dart';
+import '../data/prompt_store.dart';
 
-/// 打开设置面板：模型配置 / 调用日志 / 语言组合。
+/// 打开设置面板：模型配置 / 调用日志 / 语言组合 / 提示词管理。
 Future<void> showDictionarySettingsDialog(
   BuildContext context, {
   required DictionaryViewModel viewModel,
@@ -29,6 +30,7 @@ class _SettingsPanel extends StatefulWidget {
 
 class _SettingsPanelState extends State<_SettingsPanel> {
   String? _editingId;
+  String? _editingPromptId;
   late int _selectedTab = widget.initialTab;
   final _nameController = TextEditingController();
   final _baseUrlController = TextEditingController();
@@ -36,6 +38,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   final _modelController = TextEditingController();
   final _timeoutController = TextEditingController(text: '60');
   final _langController = TextEditingController();
+  final _promptNameController = TextEditingController();
+  final _promptContentController = TextEditingController();
 
   bool _obscureApiKey = true;
   bool _isTesting = false;
@@ -50,6 +54,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     _modelController.dispose();
     _timeoutController.dispose();
     _langController.dispose();
+    _promptNameController.dispose();
+    _promptContentController.dispose();
     super.dispose();
   }
 
@@ -160,6 +166,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                 child: switch (_selectedTab) {
                   1 => _buildLogTab(theme),
                   2 => _buildLanguageTab(theme),
+                  3 => _buildPromptTab(theme),
                   _ => _buildModelTab(theme),
                 },
               ),
@@ -185,6 +192,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           _sideItem(theme, 0, Icons.tune_outlined, '模型配置'),
           _sideItem(theme, 1, Icons.receipt_long_outlined, '调用日志'),
           _sideItem(theme, 2, Icons.translate_outlined, '语言组合'),
+          _sideItem(theme, 3, Icons.description_outlined, '提示词管理'),
         ],
       ),
     );
@@ -471,6 +479,201 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     );
   }
 
+  /// 提示词管理页签：切换 / 新增 / 编辑 / 删除提示词模板。
+  Widget _buildPromptTab(ThemeData theme) {
+    final viewModel = widget.viewModel;
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        Text('已保存的提示词模板（点选切换生效）',
+            style:
+                theme.textTheme.bodySmall?.copyWith(color: Colors.black54)),
+        const SizedBox(height: 4),
+        RadioGroup<String>(
+          groupValue: viewModel.selectedPrompt.id,
+          onChanged: (value) {
+            if (value != null) viewModel.selectPrompt(value);
+          },
+          child: Column(
+            children: [
+              for (final template in viewModel.promptTemplates)
+                _promptTile(theme, template),
+            ],
+          ),
+        ),
+        const Divider(height: 24),
+        Text(
+          _editingPromptId == null ? '新增提示词模板' : '编辑提示词模板',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        _buildField(
+          label: '名称（选填）',
+          hint: '例如 简短词典 / 详细解释',
+          controller: _promptNameController,
+        ),
+        const SizedBox(height: 10),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('提示词内容',
+                style:
+                    TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const SizedBox(height: 4),
+            TextField(
+              controller: _promptContentController,
+              maxLines: 8,
+              minLines: 4,
+              decoration: const InputDecoration(
+                hintText: '支持 {word}（用户输入的单词）和 {language}（语言方向）占位符',
+                border: OutlineInputBorder(),
+              ),
+              style: const TextStyle(fontSize: 13, height: 1.4),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            if (_editingPromptId == PromptTemplate.defaultPromptId)
+              TextButton.icon(
+                onPressed: () async {
+                  _promptContentController.text =
+                      PromptTemplate.defaultContent;
+                  _promptNameController.text = PromptTemplate.defaultName;
+                  await widget.viewModel.restoreDefaultPrompt();
+                  _resetPromptForm();
+                },
+                icon: const Icon(Icons.restore, size: 16),
+                label: const Text('恢复默认内容'),
+              ),
+            const Spacer(),
+            if (_editingPromptId != null)
+              TextButton(
+                onPressed: _resetPromptForm,
+                child: const Text('取消编辑'),
+              ),
+            const SizedBox(width: 4),
+            FilledButton.icon(
+              onPressed: _promptContentController.text.trim().isEmpty
+                  ? null
+                  : _savePrompt,
+              icon: const Icon(Icons.check, size: 16),
+              label: Text(_editingPromptId == null ? '保存并生效' : '保存修改'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          '提示词会与用户输入的单词结合（替换 {word} / {language} 占位符）后，统一发送给当前生效的模型。',
+          style: theme.textTheme.bodySmall?.copyWith(color: Colors.black45),
+        ),
+      ],
+    );
+  }
+
+  Widget _promptTile(ThemeData theme, PromptTemplate template) {
+    final viewModel = widget.viewModel;
+    final isActive = viewModel.selectedPrompt.id == template.id;
+    return RadioListTile<String>(
+      value: template.id,
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+      title: Row(
+        children: [
+          Flexible(
+            child: Text(
+              template.name.trim().isEmpty ? '未命名模板' : template.name,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+          if (isActive) ...[
+            const SizedBox(width: 6),
+            const Icon(Icons.check_circle, size: 16, color: Colors.green),
+            const SizedBox(width: 4),
+            const Text('生效中',
+                style: TextStyle(fontSize: 12, color: Colors.green)),
+          ],
+        ],
+      ),
+      subtitle: Text(
+        template.content.replaceAll('\n', ' '),
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
+        style: const TextStyle(fontSize: 12),
+      ),
+      secondary: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: () => _startPromptEdit(template),
+            icon: const Icon(Icons.edit_outlined, size: 18),
+            tooltip: '编辑',
+          ),
+          IconButton(
+            onPressed: viewModel.promptTemplates.length <= 1
+                ? null
+                : () => _deletePrompt(template),
+            icon: Icon(
+              Icons.delete_outline,
+              size: 18,
+              color: viewModel.promptTemplates.length <= 1
+                  ? Colors.black26
+                  : theme.colorScheme.error,
+            ),
+            tooltip: viewModel.promptTemplates.length <= 1
+                ? '至少保留一个模板'
+                : '删除',
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startPromptEdit(PromptTemplate template) {
+    setState(() {
+      _editingPromptId = template.id;
+      _promptNameController.text = template.name;
+      _promptContentController.text = template.content;
+    });
+  }
+
+  void _resetPromptForm() {
+    setState(() {
+      _editingPromptId = null;
+      _promptNameController.clear();
+      _promptContentController.clear();
+    });
+  }
+
+  Future<void> _savePrompt() async {
+    final content = _promptContentController.text.trim();
+    if (content.isEmpty) return;
+    final id = _editingPromptId ?? PromptStore.newPromptId();
+    final name = _promptNameController.text.trim().isEmpty
+        ? '未命名模板'
+        : _promptNameController.text.trim();
+    await widget.viewModel
+        .savePrompt(PromptTemplate(id: id, name: name, content: content));
+    if (!mounted) return;
+    _resetPromptForm();
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('提示词已保存并生效')));
+  }
+
+  Future<void> _deletePrompt(PromptTemplate template) async {
+    final viewModel = widget.viewModel;
+    if (viewModel.promptTemplates.length <= 1) return;
+    await viewModel.deletePrompt(template.id);
+    if (!mounted) return;
+    if (_editingPromptId == template.id) _resetPromptForm();
+    ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('已删除 ${template.name.trim().isEmpty ? '未命名模板' : template.name}')));
+  }
+
   Widget _profileTile(ThemeData theme, LlmConfig profile) {
     final viewModel = widget.viewModel;
     final isActive = viewModel.activeProfileId == profile.id;
@@ -583,6 +786,21 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         style: const TextStyle(fontSize: 12),
       ),
       children: [
+        if ((log.systemPrompt ?? '').isNotEmpty) ...[
+          const Text('提示词',
+              style: TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 12)),
+          const SizedBox(height: 4),
+          SelectableText(
+            log.systemPrompt!,
+            style: TextStyle(
+              fontSize: 13,
+              height: 1.4,
+              color: Colors.black54,
+            ),
+          ),
+          const SizedBox(height: 10),
+        ],
         Align(
           alignment: Alignment.centerLeft,
           child: Column(

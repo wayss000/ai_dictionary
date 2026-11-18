@@ -13,6 +13,7 @@ class LlmCallLog {
     required this.success,
     required this.input,
     required this.output,
+    this.systemPrompt,
     this.promptTokens,
     this.completionTokens,
   });
@@ -26,6 +27,9 @@ class LlmCallLog {
 
   /// 发给大模型的输入内容。
   final String input;
+
+  /// 发给大模型的完整提示词（提示词模板填充占位符后的内容）。
+  final String? systemPrompt;
 
   /// 模型原始输出（失败时为错误信息）。
   final String output;
@@ -41,6 +45,7 @@ class LlmCallLog {
         'durationMs': durationMs,
         'success': success,
         'input': input,
+        if (systemPrompt != null) 'systemPrompt': systemPrompt,
         'output': output,
         if (promptTokens != null) 'promptTokens': promptTokens,
         if (completionTokens != null) 'completionTokens': completionTokens,
@@ -54,6 +59,7 @@ class LlmCallLog {
         durationMs: json['durationMs'] as int? ?? 0,
         success: json['success'] as bool? ?? false,
         input: json['input'] as String? ?? '',
+        systemPrompt: json['systemPrompt'] as String?,
         output: json['output'] as String? ?? '',
         promptTokens: json['promptTokens'] as int?,
         completionTokens: json['completionTokens'] as int?,

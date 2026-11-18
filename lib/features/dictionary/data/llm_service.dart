@@ -36,12 +36,16 @@ class ExplainResponse {
   const ExplainResponse({
     required this.result,
     required this.rawOutput,
+    required this.finalPrompt,
     this.promptTokens,
     this.completionTokens,
   });
 
   final DictionaryResult result;
   final String rawOutput;
+
+  /// 本次实际发送给大模型的完整提示词（模板填充占位符后的内容）。
+  final String finalPrompt;
   final int? promptTokens;
   final int? completionTokens;
 }
@@ -63,10 +67,13 @@ class LlmService {
   final http.Client _client;
 
   /// 调用 /chat/completions，让模型输出结构化 JSON 的词典解释。
+  ///
+  /// [systemPrompt] 是提示词模板与本次查询结合后的最终提示词，作为 system 消息发送；
+  /// 用户输入的 [query] 作为 user 消息发送。
   Future<ExplainResponse> explain({
     required LlmConfig config,
     required String query,
-    required String languagePair,
+    required String systemPrompt,
   }) async {
     if (!config.isConfigured) {
       throw LlmException('尚未配置模型，请点击右上角设置填写 API 地址、API Key 和模型名称。');
@@ -86,11 +93,8 @@ class LlmService {
             'temperature': 0.3,
             'max_tokens': 300,
             'messages': [
-              {'role': 'system', 'content': _systemPrompt},
-              {
-                'role': 'user',
-                'content': '语言方向：$languagePair\n待解释内容：$query',
-              },
+              {'role': 'system', 'content': systemPrompt},
+              {'role': 'user', 'content': query},
             ],
           }),
         )
@@ -121,6 +125,7 @@ class LlmService {
     return ExplainResponse(
       result: _parseResult(content, config.model),
       rawOutput: content,
+      finalPrompt: systemPrompt,
       promptTokens: promptTokens,
       completionTokens: completionTokens,
     );
@@ -236,8 +241,3 @@ class LlmService {
 
   void dispose() => _client.close();
 }
-
-const _systemPrompt = '''
-你是词典。按用户给的语言方向简要解释输入内容，只输出JSON，无任何其他文字：
-{"term":"查询词","translation":"译文","context":"一句话语境解释","partOfSpeech":"词性","examples":[{"original":"例句","translated":"例句译文"}]}
-每个字段必须简短：translation一个含义即可，context不超过20字，examples最多1条。没有内容就输出空字符串或空数组。''';
