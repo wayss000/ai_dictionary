@@ -16,27 +16,32 @@ Future<String?> showLanguagePicker(
     context: context,
     showDragHandle: true,
     builder: (context) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const ListTile(title: Text('选择语言组合'), subtitle: Text('输入语言 → 输出语言')),
-          for (final pair in languagePairs)
-            ListTile(
-              leading: Icon(
-                pair == selectedLanguagePair
-                    ? Icons.radio_button_checked
-                    : Icons.radio_button_off,
-              ),
-              title: Text(pair),
-              onTap: () => Navigator.of(context).pop(pair),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('选择语言组合'),
+              subtitle: Text('输入语言 → 输出语言'),
             ),
-          ListTile(
-            leading: const Icon(Icons.tune),
-            title: const Text('管理语言组合'),
-            onTap: () => Navigator.of(context).pop(),
-          ),
-          const SizedBox(height: 12),
-        ],
+            for (final pair in languagePairs)
+              ListTile(
+                leading: Icon(
+                  pair == selectedLanguagePair
+                      ? Icons.radio_button_checked
+                      : Icons.radio_button_off,
+                ),
+                title: Text(pair),
+                onTap: () => Navigator.of(context).pop(pair),
+              ),
+            ListTile(
+              leading: const Icon(Icons.tune),
+              title: const Text('管理语言组合'),
+              onTap: () => Navigator.of(context).pop(),
+            ),
+            const SizedBox(height: 12),
+          ],
+        ),
       ),
     ),
   );

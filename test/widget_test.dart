@@ -18,6 +18,7 @@ void main() {
 
     await tester.tap(find.text('自动识别 → 中文'));
     await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('日语 → 中文'));
     await tester.tap(find.text('日语 → 中文'));
     await tester.pumpAndSettle();
 
