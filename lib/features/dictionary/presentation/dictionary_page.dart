@@ -68,11 +68,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
   }
 
   Future<void> _openSettings() {
-    return showDictionarySettingsDialog(
-      context,
-      initialConfig: _viewModel.config,
-      onSave: _viewModel.updateConfig,
-    );
+    return showDictionarySettingsDialog(context, viewModel: _viewModel);
   }
 
   void _explain() => _viewModel.explain(_queryController.text);

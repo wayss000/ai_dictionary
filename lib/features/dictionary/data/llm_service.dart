@@ -31,6 +31,21 @@ class WordExample {
   final String translated;
 }
 
+/// 一次解释调用的完整返回：结构化结果 + 模型原始输出与 token 用量。
+class ExplainResponse {
+  const ExplainResponse({
+    required this.result,
+    required this.rawOutput,
+    this.promptTokens,
+    this.completionTokens,
+  });
+
+  final DictionaryResult result;
+  final String rawOutput;
+  final int? promptTokens;
+  final int? completionTokens;
+}
+
 /// 调用大模型失败时抛出的异常。
 class LlmException implements Exception {
   LlmException(this.message);
@@ -50,7 +65,7 @@ class LlmService {
   static const _timeout = Duration(seconds: 60);
 
   /// 调用 /chat/completions，让模型输出结构化 JSON 的词典解释。
-  Future<DictionaryResult> explain({
+  Future<ExplainResponse> explain({
     required LlmConfig config,
     required String query,
     required String languagePair,
@@ -96,7 +111,20 @@ class LlmService {
             as String? ??
         '';
 
-    return _parseResult(content, config.model);
+    final usage = data['usage'];
+    int? promptTokens;
+    int? completionTokens;
+    if (usage is Map<String, dynamic>) {
+      promptTokens = usage['prompt_tokens'] as int?;
+      completionTokens = usage['completion_tokens'] as int?;
+    }
+
+    return ExplainResponse(
+      result: _parseResult(content, config.model),
+      rawOutput: content,
+      promptTokens: promptTokens,
+      completionTokens: completionTokens,
+    );
   }
 
   /// 只验证配置是否可用（发起一次极小的对话请求）。
