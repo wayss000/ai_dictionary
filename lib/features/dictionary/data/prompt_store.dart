@@ -54,22 +54,21 @@ class PromptTemplate {
     );
   }
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'content': content,
-      };
+  Map<String, dynamic> toJson() => {'id': id, 'name': name, 'content': content};
 
   factory PromptTemplate.fromJson(Map<String, dynamic> json) => PromptTemplate(
-        id: json['id'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        content: json['content'] as String? ?? '',
-      );
+    id: json['id'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    content: json['content'] as String? ?? '',
+  );
 }
 
 /// 提示词模板仓库：本地持久化全部模板 + 当前生效的模板 id。
 class PromptStore {
-  const PromptStore({this.templates = const [defaultTemplate], this.selectedId});
+  const PromptStore({
+    this.templates = const [defaultTemplate],
+    this.selectedId,
+  });
 
   static const _key = 'llm_prompts_v1';
 
@@ -105,7 +104,8 @@ class PromptStore {
       final list = jsonDecode(raw) as List;
       final templates = [
         for (final item in list)
-          if (item is Map<String, dynamic> && (item['content'] as String? ?? '').isNotEmpty)
+          if (item is Map<String, dynamic> &&
+              (item['content'] as String? ?? '').isNotEmpty)
             PromptTemplate.fromJson(item),
       ];
       if (templates.isEmpty) return const PromptStore();

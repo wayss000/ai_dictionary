@@ -71,20 +71,24 @@ void main() {
     final viewModel = DictionaryViewModel();
     await Future<void>.delayed(Duration.zero);
 
-    await viewModel.saveProfile(const LlmConfig(
-      id: 'a',
-      name: 'A',
-      baseUrl: 'https://a.com/v1',
-      apiKey: 'k-a',
-      model: 'model-a',
-    ));
-    await viewModel.saveProfile(const LlmConfig(
-      id: 'b',
-      name: 'B',
-      baseUrl: 'https://b.com/v1',
-      apiKey: 'k-b',
-      model: 'model-b',
-    ));
+    await viewModel.saveProfile(
+      const LlmConfig(
+        id: 'a',
+        name: 'A',
+        baseUrl: 'https://a.com/v1',
+        apiKey: 'k-a',
+        model: 'model-a',
+      ),
+    );
+    await viewModel.saveProfile(
+      const LlmConfig(
+        id: 'b',
+        name: 'B',
+        baseUrl: 'https://b.com/v1',
+        apiKey: 'k-b',
+        model: 'model-b',
+      ),
+    );
 
     expect(viewModel.profiles, hasLength(2));
     // 新保存的配置自动生效。
@@ -161,8 +165,10 @@ void main() {
       name: 'T',
       content: '语言方向：{language}\n待解释内容：{word}',
     );
-    final rendered =
-        template.render(word: 'transformer', languagePair: '英语 → 中文');
+    final rendered = template.render(
+      word: 'transformer',
+      languagePair: '英语 → 中文',
+    );
     expect(rendered, contains('语言方向：英语 → 中文'));
     expect(rendered, contains('待解释内容：transformer'));
     expect(rendered, isNot(contains('{word}')));
@@ -171,57 +177,64 @@ void main() {
 
   test('render appends the word when the template has no {word}', () {
     const template = PromptTemplate(id: 't', name: 'T', content: '你是词典。');
-    final rendered =
-        template.render(word: 'transformer', languagePair: '英语 → 中文');
+    final rendered = template.render(
+      word: 'transformer',
+      languagePair: '英语 → 中文',
+    );
     expect(rendered, contains('你是词典。'));
     expect(rendered, contains('transformer'));
   });
 
-  test('savePrompt adds and activates; select and delete with fallback',
-      () async {
-    final viewModel = DictionaryViewModel();
-    await Future<void>.delayed(Duration.zero);
+  test(
+    'savePrompt adds and activates; select and delete with fallback',
+    () async {
+      final viewModel = DictionaryViewModel();
+      await Future<void>.delayed(Duration.zero);
 
-    await viewModel.savePrompt(const PromptTemplate(
-      id: 'p1',
-      name: '自定义',
-      content: '解释 {word}，语言方向 {language}。',
-    ));
-    // 新保存的模板自动生效。
-    expect(viewModel.promptTemplates, hasLength(2));
-    expect(viewModel.selectedPrompt.id, 'p1');
+      await viewModel.savePrompt(
+        const PromptTemplate(
+          id: 'p1',
+          name: '自定义',
+          content: '解释 {word}，语言方向 {language}。',
+        ),
+      );
+      // 新保存的模板自动生效。
+      expect(viewModel.promptTemplates, hasLength(2));
+      expect(viewModel.selectedPrompt.id, 'p1');
 
-    await viewModel.selectPrompt(PromptTemplate.defaultPromptId);
-    expect(viewModel.selectedPrompt.id, PromptTemplate.defaultPromptId);
+      await viewModel.selectPrompt(PromptTemplate.defaultPromptId);
+      expect(viewModel.selectedPrompt.id, PromptTemplate.defaultPromptId);
 
-    // 删除生效模板后自动切到剩余模板。
-    await viewModel.deletePrompt(PromptTemplate.defaultPromptId);
-    expect(viewModel.promptTemplates, hasLength(1));
-    expect(viewModel.selectedPrompt.id, 'p1');
+      // 删除生效模板后自动切到剩余模板。
+      await viewModel.deletePrompt(PromptTemplate.defaultPromptId);
+      expect(viewModel.promptTemplates, hasLength(1));
+      expect(viewModel.selectedPrompt.id, 'p1');
 
-    // 至少保留一个模板：删除最后一个模板会被拒绝。
-    await viewModel.deletePrompt('p1');
-    expect(viewModel.promptTemplates, hasLength(1));
-    expect(viewModel.selectedPrompt.id, 'p1');
+      // 至少保留一个模板：删除最后一个模板会被拒绝。
+      await viewModel.deletePrompt('p1');
+      expect(viewModel.promptTemplates, hasLength(1));
+      expect(viewModel.selectedPrompt.id, 'p1');
 
-    viewModel.dispose();
-  });
+      viewModel.dispose();
+    },
+  );
 
   test('restoreDefaultPrompt resets the default template content', () async {
     final viewModel = DictionaryViewModel();
     await Future<void>.delayed(Duration.zero);
 
-    await viewModel.savePrompt(const PromptTemplate(
-      id: PromptTemplate.defaultPromptId,
-      name: '被改过的默认模板',
-      content: '自定义内容',
-    ));
+    await viewModel.savePrompt(
+      const PromptTemplate(
+        id: PromptTemplate.defaultPromptId,
+        name: '被改过的默认模板',
+        content: '自定义内容',
+      ),
+    );
     expect(viewModel.selectedPrompt.content, '自定义内容');
 
     await viewModel.restoreDefaultPrompt();
     expect(viewModel.selectedPrompt.name, PromptTemplate.defaultName);
-    expect(viewModel.selectedPrompt.content,
-        PromptTemplate.defaultContent);
+    expect(viewModel.selectedPrompt.content, PromptTemplate.defaultContent);
 
     viewModel.dispose();
   });
@@ -232,8 +245,7 @@ void main() {
 
     await viewModel.explain('transformer');
     expect(viewModel.logs, hasLength(1));
-    expect(viewModel.logs.first.systemPrompt,
-        contains('待解释内容：transformer'));
+    expect(viewModel.logs.first.systemPrompt, contains('待解释内容：transformer'));
     expect(viewModel.logs.first.input, 'transformer');
 
     viewModel.dispose();

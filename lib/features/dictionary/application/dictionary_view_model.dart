@@ -10,7 +10,7 @@ import '../data/prompt_store.dart';
 
 class DictionaryViewModel extends ChangeNotifier {
   DictionaryViewModel({LlmService? llmService})
-      : _llmService = llmService ?? LlmService() {
+    : _llmService = llmService ?? LlmService() {
     _init();
   }
 
@@ -146,7 +146,10 @@ class DictionaryViewModel extends ChangeNotifier {
       templates.add(template);
       selectedId = template.id;
     }
-    _promptStore = _promptStore.copyWith(templates: templates, selectedId: selectedId);
+    _promptStore = _promptStore.copyWith(
+      templates: templates,
+      selectedId: selectedId,
+    );
     await _promptStore.save();
     _notify();
   }
@@ -164,7 +167,8 @@ class DictionaryViewModel extends ChangeNotifier {
   Future<void> deletePrompt(String id) async {
     if (_promptStore.templates.length <= 1) return;
     if (!_promptStore.templates.any((t) => t.id == id)) return;
-    final templates = [..._promptStore.templates]..removeWhere((t) => t.id == id);
+    final templates = [..._promptStore.templates]
+      ..removeWhere((t) => t.id == id);
     var selectedId = _promptStore.selectedId;
     if (selectedId == id) selectedId = templates.first.id;
     _promptStore = PromptStore(templates: templates, selectedId: selectedId);
@@ -189,8 +193,10 @@ class DictionaryViewModel extends ChangeNotifier {
     final word = query.trim();
     // 实际发送的 user 消息就是单词本身；语言方向与单词已由提示词模板整合进 system 消息。
     final input = word;
-    final systemPrompt =
-        selectedPrompt.render(word: word, languagePair: _languagePair);
+    final systemPrompt = selectedPrompt.render(
+      word: word,
+      languagePair: _languagePair,
+    );
     final model = _store.active?.model ?? '未配置';
     final stopwatch = Stopwatch()..start();
 
@@ -225,19 +231,25 @@ class DictionaryViewModel extends ChangeNotifier {
       final seconds = _store.active?.effectiveTimeoutSeconds ?? 60;
       _hasError = true;
       _errorMessage = '请求超时（$seconds 秒）。可在设置中调大该模型的超时时间，或换用更快的模型。';
-      await _addLog(_errorLog(word, model, stopwatch, '超时（$seconds 秒），请求未完成', systemPrompt));
+      await _addLog(
+        _errorLog(word, model, stopwatch, '超时（$seconds 秒），请求未完成', systemPrompt),
+      );
     } on LlmException catch (error) {
       stopwatch.stop();
       if (_isDisposed) return;
       _hasError = true;
       _errorMessage = error.message;
-      await _addLog(_errorLog(word, model, stopwatch, error.message, systemPrompt));
+      await _addLog(
+        _errorLog(word, model, stopwatch, error.message, systemPrompt),
+      );
     } catch (error) {
       stopwatch.stop();
       if (_isDisposed) return;
       _hasError = true;
       _errorMessage = '请求出错：$error';
-      await _addLog(_errorLog(word, model, stopwatch, error.toString(), systemPrompt));
+      await _addLog(
+        _errorLog(word, model, stopwatch, error.toString(), systemPrompt),
+      );
     } finally {
       if (!_isDisposed) {
         _isLoading = false;
@@ -247,8 +259,12 @@ class DictionaryViewModel extends ChangeNotifier {
   }
 
   LlmCallLog _errorLog(
-      String input, String model, Stopwatch stopwatch, String message,
-      [String? systemPrompt]) {
+    String input,
+    String model,
+    Stopwatch stopwatch,
+    String message, [
+    String? systemPrompt,
+  ]) {
     return LlmCallLog(
       time: DateTime.now(),
       query: input,

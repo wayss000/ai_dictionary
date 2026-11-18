@@ -34,8 +34,7 @@ Future<String?> showLanguagePicker(
               leading: const Icon(Icons.tune),
               title: const Text('管理语言组合'),
               subtitle: const Text('在设置中添加、删除或切换'),
-              onTap: () =>
-                  Navigator.of(context).pop(kManageLanguageSignal),
+              onTap: () => Navigator.of(context).pop(kManageLanguageSignal),
             ),
             const SizedBox(height: 12),
           ],

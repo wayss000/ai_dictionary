@@ -347,9 +347,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                 Icon(
                   icon,
                   size: 18,
-                  color: selected
-                      ? theme.colorScheme.primary
-                      : Colors.black54,
+                  color: selected ? theme.colorScheme.primary : Colors.black54,
                 ),
                 const SizedBox(width: 8),
                 Text(
@@ -605,9 +603,10 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        Text('已保存的语言组合（点选切换生效）',
-            style:
-                theme.textTheme.bodySmall?.copyWith(color: Colors.black54)),
+        Text(
+          '已保存的语言组合（点选切换生效）',
+          style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
+        ),
         const SizedBox(height: 4),
         RadioGroup<String>(
           groupValue: viewModel.languagePair,
@@ -628,21 +627,24 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                           pair,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontWeight:
-                                pair == viewModel.languagePair
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
+                            fontWeight: pair == viewModel.languagePair
+                                ? FontWeight.w700
+                                : FontWeight.w500,
                           ),
                         ),
                       ),
                       if (pair == viewModel.languagePair) ...[
                         const SizedBox(width: 6),
-                        const Icon(Icons.check_circle,
-                            size: 16, color: Colors.green),
+                        const Icon(
+                          Icons.check_circle,
+                          size: 16,
+                          color: Colors.green,
+                        ),
                         const SizedBox(width: 4),
-                        const Text('生效中',
-                            style: TextStyle(
-                                fontSize: 12, color: Colors.green)),
+                        const Text(
+                          '生效中',
+                          style: TextStyle(fontSize: 12, color: Colors.green),
+                        ),
                       ],
                     ],
                   ),
@@ -666,8 +668,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           ),
         ),
         const Divider(height: 24),
-        Text('新增语言组合',
-            style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text('新增语言组合', style: const TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         _buildField(
           label: '语言组合（输入语言 → 输出语言）',
@@ -700,9 +701,10 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     return ListView(
       padding: EdgeInsets.zero,
       children: [
-        Text('已保存的提示词模板（点选切换生效）',
-            style:
-                theme.textTheme.bodySmall?.copyWith(color: Colors.black54)),
+        Text(
+          '已保存的提示词模板（点选切换生效）',
+          style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
+        ),
         const SizedBox(height: 4),
         RadioGroup<String>(
           groupValue: viewModel.selectedPrompt.id,
@@ -731,9 +733,10 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('提示词内容',
-                style:
-                    TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+            const Text(
+              '提示词内容',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
             const SizedBox(height: 4),
             TextField(
               controller: _promptContentController,
@@ -755,8 +758,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
             if (_editingPromptId == PromptTemplate.defaultPromptId)
               TextButton.icon(
                 onPressed: () async {
-                  _promptContentController.text =
-                      PromptTemplate.defaultContent;
+                  _promptContentController.text = PromptTemplate.defaultContent;
                   _promptNameController.text = PromptTemplate.defaultName;
                   await widget.viewModel.restoreDefaultPrompt();
                   _resetPromptForm();
@@ -811,8 +813,10 @@ class _SettingsPanelState extends State<_SettingsPanel> {
             const SizedBox(width: 6),
             const Icon(Icons.check_circle, size: 16, color: Colors.green),
             const SizedBox(width: 4),
-            const Text('生效中',
-                style: TextStyle(fontSize: 12, color: Colors.green)),
+            const Text(
+              '生效中',
+              style: TextStyle(fontSize: 12, color: Colors.green),
+            ),
           ],
         ],
       ),
@@ -841,9 +845,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                   ? Colors.black26
                   : theme.colorScheme.error,
             ),
-            tooltip: viewModel.promptTemplates.length <= 1
-                ? '至少保留一个模板'
-                : '删除',
+            tooltip: viewModel.promptTemplates.length <= 1 ? '至少保留一个模板' : '删除',
           ),
         ],
       ),
@@ -873,12 +875,14 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     final name = _promptNameController.text.trim().isEmpty
         ? '未命名模板'
         : _promptNameController.text.trim();
-    await widget.viewModel
-        .savePrompt(PromptTemplate(id: id, name: name, content: content));
+    await widget.viewModel.savePrompt(
+      PromptTemplate(id: id, name: name, content: content),
+    );
     if (!mounted) return;
     _resetPromptForm();
-    ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('提示词已保存并生效')));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('提示词已保存并生效')));
   }
 
   Future<void> _deletePrompt(PromptTemplate template) async {
@@ -888,7 +892,12 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     if (!mounted) return;
     if (_editingPromptId == template.id) _resetPromptForm();
     ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已删除 ${template.name.trim().isEmpty ? '未命名模板' : template.name}')));
+      SnackBar(
+        content: Text(
+          '已删除 ${template.name.trim().isEmpty ? '未命名模板' : template.name}',
+        ),
+      ),
+    );
   }
 
   Widget _profileTile(ThemeData theme, LlmConfig profile) {
@@ -950,17 +959,17 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     final logs = widget.viewModel.logs;
     if (logs.isEmpty) {
       return const Center(
-        child: Text('暂无调用记录，去解释几个词吧。',
-            style: TextStyle(color: Colors.black38)),
+        child: Text('暂无调用记录，去解释几个词吧。', style: TextStyle(color: Colors.black38)),
       );
     }
     return Column(
       children: [
         Row(
           children: [
-            Text('最近 ${logs.length} 次调用',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: Colors.black54)),
+            Text(
+              '最近 ${logs.length} 次调用',
+              style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
+            ),
             const Spacer(),
             TextButton.icon(
               onPressed: widget.viewModel.clearLogs,
@@ -1009,17 +1018,14 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       ),
       children: [
         if ((log.systemPrompt ?? '').isNotEmpty) ...[
-          const Text('提示词',
-              style: TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 12)),
+          const Text(
+            '提示词',
+            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+          ),
           const SizedBox(height: 4),
           SelectableText(
             log.systemPrompt!,
-            style: TextStyle(
-              fontSize: 13,
-              height: 1.4,
-              color: Colors.black54,
-            ),
+            style: TextStyle(fontSize: 13, height: 1.4, color: Colors.black54),
           ),
           const SizedBox(height: 10),
         ],
@@ -1028,25 +1034,27 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('输入',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 12)),
+              const Text(
+                '输入',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              ),
               const SizedBox(height: 4),
-              SelectableText(log.input,
-                  style: const TextStyle(fontSize: 13, height: 1.4)),
+              SelectableText(
+                log.input,
+                style: const TextStyle(fontSize: 13, height: 1.4),
+              ),
               const SizedBox(height: 10),
-              const Text('输出',
-                  style: TextStyle(
-                      fontWeight: FontWeight.w700, fontSize: 12)),
+              const Text(
+                '输出',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+              ),
               const SizedBox(height: 4),
               SelectableText(
                 log.output,
                 style: TextStyle(
                   fontSize: 13,
                   height: 1.4,
-                  color: log.success
-                      ? Colors.black87
-                      : theme.colorScheme.error,
+                  color: log.success ? Colors.black87 : theme.colorScheme.error,
                 ),
               ),
             ],
@@ -1066,9 +1074,10 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(
-                fontWeight: FontWeight.w600, fontSize: 13)),
+        Text(
+          label,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+        ),
         const SizedBox(height: 4),
         TextField(
           controller: controller,

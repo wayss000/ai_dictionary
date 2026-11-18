@@ -4,7 +4,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// 语言组合仓库：可配置的语言组合列表 + 当前生效的组合。
 class LanguagePairStore {
-  const LanguagePairStore({this.pairs = defaultPairs, this.selected = defaultPair});
+  const LanguagePairStore({
+    this.pairs = defaultPairs,
+    this.selected = defaultPair,
+  });
 
   static const defaultPair = '自动识别 → 中文';
   static const defaultPairs = [

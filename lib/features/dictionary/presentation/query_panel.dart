@@ -28,7 +28,8 @@ class QueryPanel extends StatelessWidget {
             Shortcuts(
               // 回车键触发"解释"，Shift + 回车保留换行。
               shortcuts: {
-                SingleActivator(LogicalKeyboardKey.enter): const _ExplainIntent(),
+                SingleActivator(LogicalKeyboardKey.enter):
+                    const _ExplainIntent(),
               },
               child: Actions(
                 actions: {

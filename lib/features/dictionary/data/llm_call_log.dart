@@ -38,32 +38,32 @@ class LlmCallLog {
   final int? completionTokens;
 
   Map<String, dynamic> toJson() => {
-        'time': time.toIso8601String(),
-        'query': query,
-        'languagePair': languagePair,
-        'model': model,
-        'durationMs': durationMs,
-        'success': success,
-        'input': input,
-        if (systemPrompt != null) 'systemPrompt': systemPrompt,
-        'output': output,
-        if (promptTokens != null) 'promptTokens': promptTokens,
-        if (completionTokens != null) 'completionTokens': completionTokens,
-      };
+    'time': time.toIso8601String(),
+    'query': query,
+    'languagePair': languagePair,
+    'model': model,
+    'durationMs': durationMs,
+    'success': success,
+    'input': input,
+    if (systemPrompt != null) 'systemPrompt': systemPrompt,
+    'output': output,
+    if (promptTokens != null) 'promptTokens': promptTokens,
+    if (completionTokens != null) 'completionTokens': completionTokens,
+  };
 
   factory LlmCallLog.fromJson(Map<String, dynamic> json) => LlmCallLog(
-        time: DateTime.tryParse(json['time'] as String? ?? '') ?? DateTime.now(),
-        query: json['query'] as String? ?? '',
-        languagePair: json['languagePair'] as String? ?? '',
-        model: json['model'] as String? ?? '',
-        durationMs: json['durationMs'] as int? ?? 0,
-        success: json['success'] as bool? ?? false,
-        input: json['input'] as String? ?? '',
-        systemPrompt: json['systemPrompt'] as String?,
-        output: json['output'] as String? ?? '',
-        promptTokens: json['promptTokens'] as int?,
-        completionTokens: json['completionTokens'] as int?,
-      );
+    time: DateTime.tryParse(json['time'] as String? ?? '') ?? DateTime.now(),
+    query: json['query'] as String? ?? '',
+    languagePair: json['languagePair'] as String? ?? '',
+    model: json['model'] as String? ?? '',
+    durationMs: json['durationMs'] as int? ?? 0,
+    success: json['success'] as bool? ?? false,
+    input: json['input'] as String? ?? '',
+    systemPrompt: json['systemPrompt'] as String?,
+    output: json['output'] as String? ?? '',
+    promptTokens: json['promptTokens'] as int?,
+    completionTokens: json['completionTokens'] as int?,
+  );
 }
 
 /// 调用日志仓库：本地持久化，最多保留最近 30 条。

@@ -201,7 +201,9 @@ class LlmService {
           final original = item['original']?.toString() ?? '';
           final translated = item['translated']?.toString() ?? '';
           if (original.isNotEmpty) {
-            examples.add(WordExample(original: original, translated: translated));
+            examples.add(
+              WordExample(original: original, translated: translated),
+            );
           }
         }
       }

@@ -26,7 +26,10 @@ class DictionaryResultCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (isLoading) return const _LoadingResultCard();
     if (hasError) {
-      return _ErrorResultCard(message: errorMessage ?? '请求失败，请重试。', onRetry: onRetry);
+      return _ErrorResultCard(
+        message: errorMessage ?? '请求失败，请重试。',
+        onRetry: onRetry,
+      );
     }
     final result = this.result;
     if (!hasResult || result == null) return const SizedBox.shrink();
@@ -53,7 +56,10 @@ class DictionaryResultCard extends StatelessWidget {
             if (result.partOfSpeech.isNotEmpty) ...[
               ResultSection(
                 title: '词性',
-                child: Text(result.partOfSpeech, style: const TextStyle(fontSize: 15)),
+                child: Text(
+                  result.partOfSpeech,
+                  style: const TextStyle(fontSize: 15),
+                ),
               ),
               const SizedBox(height: 20),
             ],
@@ -116,15 +122,25 @@ class _ErrorResultCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.error_outline, color: Theme.of(context).colorScheme.error),
+                Icon(
+                  Icons.error_outline,
+                  color: Theme.of(context).colorScheme.error,
+                ),
                 const SizedBox(width: 8),
-                const Text('解释失败', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                const Text(
+                  '解释失败',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                ),
               ],
             ),
             const SizedBox(height: 12),
             SelectableText(
               message,
-              style: TextStyle(fontSize: 14, height: 1.5, color: Colors.black87),
+              style: TextStyle(
+                fontSize: 14,
+                height: 1.5,
+                color: Colors.black87,
+              ),
             ),
             const SizedBox(height: 16),
             TextButton.icon(
@@ -156,7 +172,10 @@ class _ResultHeading extends StatelessWidget {
             children: [
               SelectableText(
                 result.term,
-                style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
               if (result.translation.isNotEmpty) ...[
                 const SizedBox(height: 6),
