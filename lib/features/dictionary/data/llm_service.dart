@@ -96,6 +96,7 @@ class LlmService {
         instructions: systemPrompt,
         timeout: Duration(seconds: config.effectiveTimeoutSeconds),
       );
+      _ensureContent(response.text);
       return ExplainResponse(
         result: _parseResult(response.text, config.model),
         rawOutput: response.text,
@@ -117,7 +118,7 @@ class LlmService {
           body: jsonEncode({
             'model': config.model,
             'temperature': 0.3,
-            'max_tokens': 300,
+            'max_tokens': 2048,
             'messages': [
               {'role': 'system', 'content': systemPrompt},
               {'role': 'user', 'content': query},
@@ -143,11 +144,10 @@ class LlmService {
         englishMessage: 'The model returned no results.',
       );
     }
-    final content =
-        ((choices.first as Map<String, dynamic>)['message']
-                as Map<String, dynamic>)['content']
-            as String? ??
-        '';
+    final choice = choices.first as Map<String, dynamic>;
+    final message = choice['message'] as Map<String, dynamic>;
+    final content = message['content'] as String? ?? '';
+    _ensureContent(content, finishReason: choice['finish_reason'] as String?);
 
     final usage = data['usage'];
     int? promptTokens;
@@ -163,6 +163,28 @@ class LlmService {
       finalPrompt: systemPrompt,
       promptTokens: promptTokens,
       completionTokens: completionTokens,
+    );
+  }
+
+  void _ensureContent(String content, {String? finishReason}) {
+    if (content.trim().isNotEmpty) return;
+    if (finishReason == 'length') {
+      throw LlmException(
+        '模型未返回正文，生成可能因 token 上限而中断。请重试或切换模型。',
+        englishMessage:
+            'The model returned no text and may have reached the token limit. Retry or switch models.',
+      );
+    }
+    final reason = finishReason == null || finishReason.isEmpty
+        ? ''
+        : '（结束原因：$finishReason）';
+    final englishReason = finishReason == null || finishReason.isEmpty
+        ? ''
+        : ' (finish reason: $finishReason)';
+    throw LlmException(
+      '模型返回了空内容$reason，请重试或切换模型。',
+      englishMessage:
+          'The model returned empty content$englishReason. Retry or switch models.',
     );
   }
 

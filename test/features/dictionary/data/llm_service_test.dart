@@ -9,7 +9,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 void main() {
-  Future<ExplainResponse> explain(String content) async {
+  Future<ExplainResponse> explain(
+    String? content, {
+    String? finishReason,
+  }) async {
     final service = LlmService(
       client: MockClient(
         (_) async => http.Response(
@@ -17,6 +20,7 @@ void main() {
             'choices': [
               {
                 'message': {'content': content},
+                'finish_reason': finishReason,
               },
             ],
           }),
@@ -32,6 +36,41 @@ void main() {
       systemPrompt: 'prompt',
     );
   }
+
+  test('empty responses are errors with useful diagnostics', () async {
+    for (final content in [null, '', '  \n']) {
+      await expectLater(
+        explain(content),
+        throwsA(
+          isA<LlmException>().having(
+            (error) => error.message,
+            'message',
+            contains('空内容'),
+          ),
+        ),
+      );
+    }
+    await expectLater(
+      explain('', finishReason: 'length'),
+      throwsA(
+        isA<LlmException>().having(
+          (error) => error.message,
+          'message',
+          contains('token'),
+        ),
+      ),
+    );
+    await expectLater(
+      explain('', finishReason: 'content_filter'),
+      throwsA(
+        isA<LlmException>().having(
+          (error) => error.message,
+          'message',
+          contains('content_filter'),
+        ),
+      ),
+    );
+  });
 
   testWidgets('shows unparseable output unchanged', (tester) async {
     const raw = '  原始回复\n第二行 {不完整}\n';
