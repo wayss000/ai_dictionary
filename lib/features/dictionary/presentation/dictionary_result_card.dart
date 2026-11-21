@@ -43,7 +43,20 @@ class DictionaryResultCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _ResultHeading(result: result, onCopy: onCopy),
+            if (result.rawFallback != null)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: SelectableText(result.rawFallback!)),
+                  IconButton(
+                    onPressed: onCopy,
+                    tooltip: l10n.copyResult,
+                    icon: const Icon(Icons.copy_outlined, size: 18),
+                  ),
+                ],
+              )
+            else
+              _ResultHeading(result: result, onCopy: onCopy),
             if (result.context.isNotEmpty ||
                 result.partOfSpeech.isNotEmpty ||
                 result.examples.isNotEmpty)

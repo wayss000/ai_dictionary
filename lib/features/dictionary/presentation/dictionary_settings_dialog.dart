@@ -354,7 +354,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
 
   Widget _buildSidebar(ThemeData theme) {
     return SizedBox(
-      width: 128,
+      width: l10n.isEnglish ? 148 : 128,
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
