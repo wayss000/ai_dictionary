@@ -38,13 +38,19 @@ class WordExample {
 class ExplainResponse {
   const ExplainResponse({
     required this.result,
+    required this.results,
     required this.rawOutput,
     required this.finalPrompt,
     this.promptTokens,
     this.completionTokens,
   });
 
+  /// 多条结果中的第一条（用于兼容只展示单条结果的调用方）。
   final DictionaryResult result;
+
+  /// 模型返回的全部结构化结果；一次翻译多个词语时会包含多条。
+  final List<DictionaryResult> results;
+
   final String rawOutput;
 
   /// 本次实际发送给大模型的完整提示词（模板填充占位符后的内容）。
@@ -97,8 +103,10 @@ class LlmService {
         timeout: Duration(seconds: config.effectiveTimeoutSeconds),
       );
       _ensureContent(response.text);
+      final results = _parseResults(response.text, config.model);
       return ExplainResponse(
-        result: _parseResult(response.text, config.model),
+        result: results.first,
+        results: results,
         rawOutput: response.text,
         finalPrompt: systemPrompt,
         promptTokens: response.inputTokens,
@@ -157,8 +165,10 @@ class LlmService {
       completionTokens = usage['completion_tokens'] as int?;
     }
 
+    final results = _parseResults(content, config.model);
     return ExplainResponse(
-      result: _parseResult(content, config.model),
+      result: results.first,
+      results: results,
       rawOutput: content,
       finalPrompt: systemPrompt,
       promptTokens: promptTokens,
@@ -232,24 +242,45 @@ class LlmService {
     }
   }
 
-  DictionaryResult _parseResult(String rawContent, String model) {
-    Map<String, dynamic> json;
+  /// 解析模型输出，支持单个对象或对象数组（多个词语翻译）。
+  ///
+  /// 永远至少返回一条结果：解析失败时返回一条携带原始文本的兜底结果。
+  List<DictionaryResult> _parseResults(String rawContent, String model) {
+    Object? decoded;
     try {
-      json = _extractJson(rawContent);
-      if ((json['term']?.toString() ?? '').isEmpty) {
-        throw LlmException('模型返回的数据格式不完整。');
-      }
+      decoded = _extractJsonValue(rawContent);
     } on LlmException {
-      return DictionaryResult(
-        term: '',
-        translation: '',
-        context: '',
-        partOfSpeech: '',
-        examples: const [],
-        model: model,
-        rawFallback: rawContent,
-      );
+      return [_fallbackResult(rawContent, model)];
     }
+
+    if (decoded is List) {
+      final results = <DictionaryResult>[];
+      for (final item in decoded) {
+        if (item is Map<String, dynamic>) {
+          final result = _resultFromMap(item, model);
+          // 跳过既没有 term 也没有 translation 的空对象，避免展示空白条目。
+          if (result.term.isNotEmpty || result.translation.isNotEmpty) {
+            results.add(result);
+          }
+        }
+      }
+      if (results.isNotEmpty) return results;
+      return [_fallbackResult(rawContent, model)];
+    }
+
+    if (decoded is Map<String, dynamic>) {
+      final result = _resultFromMap(decoded, model);
+      // 单个对象缺少 term 时视为格式不完整，回退展示原始文本。
+      if (result.term.isEmpty) {
+        return [_fallbackResult(rawContent, model)];
+      }
+      return [result];
+    }
+
+    return [_fallbackResult(rawContent, model)];
+  }
+
+  DictionaryResult _resultFromMap(Map<String, dynamic> json, String model) {
     final examples = <WordExample>[];
     if (json['examples'] is List) {
       for (final item in json['examples'] as List) {
@@ -264,10 +295,8 @@ class LlmService {
         }
       }
     }
-
-    final term = json['term']?.toString() ?? '';
     return DictionaryResult(
-      term: term,
+      term: json['term']?.toString() ?? '',
       translation: json['translation']?.toString() ?? '',
       context: json['context']?.toString() ?? '',
       partOfSpeech: json['partOfSpeech']?.toString() ?? '',
@@ -276,8 +305,20 @@ class LlmService {
     );
   }
 
-  /// 从模型输出中提取 JSON（容忍 markdown 代码块与 `<think>` 思考内容包裹）。
-  Map<String, dynamic> _extractJson(String raw) {
+  DictionaryResult _fallbackResult(String rawContent, String model) {
+    return DictionaryResult(
+      term: '',
+      translation: '',
+      context: '',
+      partOfSpeech: '',
+      examples: const [],
+      model: model,
+      rawFallback: rawContent,
+    );
+  }
+
+  /// 从模型输出中提取 JSON 对象或数组（容忍 markdown 代码块与 `<think>` 包裹）。
+  Object? _extractJsonValue(String raw) {
     var content = raw
         .trim()
         .replaceAll(RegExp(r'<think>[\s\S]*?</think>'), '')
@@ -286,20 +327,31 @@ class LlmService {
     final match = fence.firstMatch(content);
     if (match != null) content = match.group(1)!.trim();
 
-    try {
-      final decoded = jsonDecode(content);
-      if (decoded is Map<String, dynamic>) return decoded;
-    } catch (_) {
-      // 尝试截取第一个 { 到最后一个 } 之间的内容。
-      final start = content.indexOf('{');
-      final end = content.lastIndexOf('}');
-      if (start >= 0 && end > start) {
-        try {
-          final decoded = jsonDecode(content.substring(start, end + 1));
-          if (decoded is Map<String, dynamic>) return decoded;
-        } catch (_) {}
-      }
+    Object? tryDecode(String text) {
+      try {
+        final decoded = jsonDecode(text);
+        if (decoded is Map<String, dynamic> || decoded is List) return decoded;
+      } catch (_) {}
+      return null;
     }
+
+    final direct = tryDecode(content);
+    if (direct != null) return direct;
+
+    // 直接解析失败时，截取最外层 { } 或 [ ] 再试一次。
+    final objStart = content.indexOf('{');
+    final objEnd = content.lastIndexOf('}');
+    if (objStart >= 0 && objEnd > objStart) {
+      final decoded = tryDecode(content.substring(objStart, objEnd + 1));
+      if (decoded != null) return decoded;
+    }
+    final arrStart = content.indexOf('[');
+    final arrEnd = content.lastIndexOf(']');
+    if (arrStart >= 0 && arrEnd > arrStart) {
+      final decoded = tryDecode(content.substring(arrStart, arrEnd + 1));
+      if (decoded != null) return decoded;
+    }
+
     throw LlmException(
       '无法解析模型返回的数据，请重试。',
       englishMessage:

@@ -56,10 +56,16 @@ class _DictionaryPageState extends State<DictionaryPage> {
     return buffer.toString().trim();
   }
 
+  String _resultsToPlainText(List<DictionaryResult> results) {
+    return results.map(_resultToPlainText).join('\n\n');
+  }
+
   Future<void> _copyResult() async {
-    final result = _viewModel.result;
-    if (result == null) return;
-    await Clipboard.setData(ClipboardData(text: _resultToPlainText(result)));
+    final results = _viewModel.results;
+    if (results.isEmpty) return;
+    await Clipboard.setData(
+      ClipboardData(text: _resultsToPlainText(results)),
+    );
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -145,7 +151,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
                                   errorMessage: l10n.isEnglish
                                       ? _viewModel.englishErrorMessage
                                       : _viewModel.errorMessage,
-                                  result: _viewModel.result,
+                                  results: _viewModel.results,
                                   onCopy: _copyResult,
                                   onRetry: _explain,
                                 ),

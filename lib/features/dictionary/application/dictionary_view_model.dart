@@ -30,7 +30,7 @@ class DictionaryViewModel extends ChangeNotifier {
   bool _hasError = false;
   String? _errorMessage;
   String? _englishErrorMessage;
-  DictionaryResult? _result;
+  List<DictionaryResult> _results = const [];
   bool _isDisposed = false;
 
   LlmConfig get config => _store.active ?? const LlmConfig(id: '');
@@ -46,7 +46,12 @@ class DictionaryViewModel extends ChangeNotifier {
   bool get hasError => _hasError;
   String? get errorMessage => _errorMessage;
   String? get englishErrorMessage => _englishErrorMessage;
-  DictionaryResult? get result => _result;
+  /// 当前结果列表中的第一条，便于只需要单条结果的调用方。
+  DictionaryResult? get result =>
+      _results.isNotEmpty ? _results.first : null;
+
+  /// 模型返回的全部结果；一次翻译多个词语时会包含多条。
+  List<DictionaryResult> get results => List.unmodifiable(_results);
 
   /// 界面上展示的模型名：已配置显示真实模型名，否则显示“默认模型”。
   String get modelLabel {
@@ -186,7 +191,10 @@ class DictionaryViewModel extends ChangeNotifier {
   }
 
   /// 删除一个提示词模板；若删除的是生效模板则切到第一个剩余模板。至少保留一个。
+  ///
+  /// 内置模板（词语翻译 / 短句翻译）不可删除。
   Future<void> deletePrompt(String id) async {
+    if (PromptTemplate.builtInIds.contains(id)) return;
     if (_promptStore.templates.length <= 1) return;
     if (!_promptStore.templates.any((t) => t.id == id)) return;
     final templates = [..._promptStore.templates]
@@ -198,9 +206,13 @@ class DictionaryViewModel extends ChangeNotifier {
     _notify();
   }
 
-  /// 将默认模板恢复为内置内容（仅在编辑默认模板时使用）。
-  Future<void> restoreDefaultPrompt() async {
-    await savePrompt(PromptStore.defaultTemplate);
+  /// 将某个内置模板恢复为内置默认内容。
+  ///
+  /// 传入的 id 必须是内置模板（词语翻译 / 短句翻译），否则什么都不做。
+  Future<void> restoreBuiltInPrompt(String id) async {
+    final builtIn = PromptStore.builtInById(id);
+    if (builtIn == null) return;
+    await savePrompt(builtIn);
   }
 
   Future<void> explain(String query) async {
@@ -209,6 +221,7 @@ class DictionaryViewModel extends ChangeNotifier {
     _isLoading = true;
     _hasResult = false;
     _hasError = false;
+    _results = const [];
     _errorMessage = null;
     _englishErrorMessage = null;
     notifyListeners();
@@ -235,7 +248,7 @@ class DictionaryViewModel extends ChangeNotifier {
           .timeout(Duration(seconds: seconds));
       stopwatch.stop();
       if (_isDisposed) return;
-      _result = response.result;
+      _results = response.results;
       _hasResult = true;
       _addLog(
         LlmCallLog(

@@ -910,12 +910,15 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         const SizedBox(height: 12),
         Row(
           children: [
-            if (_editingPromptId == PromptTemplate.defaultPromptId)
+            if (_editingPromptId != null &&
+                PromptTemplate.builtInIds.contains(_editingPromptId!))
               TextButton.icon(
                 onPressed: () async {
-                  _promptContentController.text = PromptTemplate.defaultContent;
-                  _promptNameController.text = PromptTemplate.defaultName;
-                  await widget.viewModel.restoreDefaultPrompt();
+                  final builtIn = PromptStore.builtInById(_editingPromptId!);
+                  if (builtIn == null) return;
+                  _promptContentController.text = builtIn.content;
+                  _promptNameController.text = builtIn.name;
+                  await widget.viewModel.restoreBuiltInPrompt(builtIn.id);
                   _resetPromptForm();
                 },
                 icon: const Icon(Icons.restore, size: 16),
@@ -994,19 +997,23 @@ class _SettingsPanelState extends State<_SettingsPanel> {
             tooltip: l10n.edit,
           ),
           IconButton(
-            onPressed: viewModel.promptTemplates.length <= 1
+            onPressed: template.isBuiltIn ||
+                    viewModel.promptTemplates.length <= 1
                 ? null
                 : () => _deletePrompt(template),
             icon: Icon(
               Icons.delete_outline,
               size: 18,
-              color: viewModel.promptTemplates.length <= 1
+              color: template.isBuiltIn ||
+                      viewModel.promptTemplates.length <= 1
                   ? Colors.black26
                   : theme.colorScheme.error,
             ),
-            tooltip: viewModel.promptTemplates.length <= 1
-                ? l10n.keepOnePrompt
-                : l10n.delete,
+            tooltip: template.isBuiltIn
+                ? l10n.builtInPromptCannotDelete
+                : viewModel.promptTemplates.length <= 1
+                    ? l10n.keepOnePrompt
+                    : l10n.delete,
           ),
         ],
       ),
@@ -1022,8 +1029,15 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   }
 
   String _promptName(PromptTemplate template) {
-    if (template.isDefault && template.name == PromptTemplate.defaultName) {
-      return l10n.defaultPromptName;
+    // 内置模板若仍使用其默认名称，则展示本地化名称；用户改过名则保留用户命名。
+    final builtInName = template.builtInDefaultName;
+    if (builtInName != null && template.name == builtInName) {
+      if (template.id == PromptTemplate.defaultPromptId) {
+        return l10n.wordTranslationPrompt;
+      }
+      if (template.id == PromptTemplate.sentencePromptId) {
+        return l10n.sentenceTranslationPrompt;
+      }
     }
     return template.name.trim().isEmpty ? l10n.untitledPrompt : template.name;
   }

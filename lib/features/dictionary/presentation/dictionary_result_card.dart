@@ -10,7 +10,7 @@ class DictionaryResultCard extends StatelessWidget {
     required this.hasResult,
     required this.hasError,
     required this.errorMessage,
-    required this.result,
+    required this.results,
     required this.onCopy,
     required this.onRetry,
     super.key,
@@ -20,13 +20,16 @@ class DictionaryResultCard extends StatelessWidget {
   final bool hasResult;
   final bool hasError;
   final String? errorMessage;
-  final DictionaryResult? result;
+
+  /// 模型返回的全部结果；一次翻译多个词语时会包含多条。
+  final List<DictionaryResult> results;
   final VoidCallback onCopy;
   final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppStrings.of(context);
+    final theme = Theme.of(context);
     if (isLoading) return const _LoadingResultCard();
     if (hasError) {
       return _ErrorResultCard(
@@ -34,66 +37,114 @@ class DictionaryResultCard extends StatelessWidget {
         onRetry: onRetry,
       );
     }
-    final result = this.result;
-    if (!hasResult || result == null) return const SizedBox.shrink();
+    if (!hasResult || results.isEmpty) return const SizedBox.shrink();
 
+    final isMulti = results.length > 1;
     return Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (result.rawFallback != null)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: SelectableText(result.rawFallback!)),
-                  IconButton(
-                    onPressed: onCopy,
-                    tooltip: l10n.copyResult,
-                    icon: const Icon(Icons.copy_outlined, size: 18),
-                  ),
-                ],
-              )
-            else
-              _ResultHeading(result: result, onCopy: onCopy),
-            if (result.context.isNotEmpty ||
-                result.partOfSpeech.isNotEmpty ||
-                result.examples.isNotEmpty)
-              const Divider(height: 36),
-            if (result.context.isNotEmpty) ...[
-              ResultSection(
-                title: l10n.context,
-                child: Text(
-                  result.context,
-                  style: const TextStyle(fontSize: 15, height: 1.6),
+            if (isMulti)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Text(
+                      l10n.multipleResults(results.length),
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton(
+                      onPressed: onCopy,
+                      tooltip: l10n.copyResult,
+                      icon: const Icon(Icons.copy_outlined, size: 18),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
+            for (var i = 0; i < results.length; i++) ...[
+              _ResultBlock(
+                result: results[i],
+                // 多条结果时统一用顶部的"复制全部"按钮，单条结果保留标题旁的复制按钮。
+                onCopy: isMulti ? null : onCopy,
+              ),
+              if (i != results.length - 1) const Divider(height: 36),
             ],
-            if (result.partOfSpeech.isNotEmpty) ...[
-              ResultSection(
-                title: l10n.partOfSpeech,
-                child: Text(
-                  result.partOfSpeech,
-                  style: const TextStyle(fontSize: 15),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
-            if (result.examples.isNotEmpty)
-              ResultSection(
-                title: l10n.examples,
-                child: _ExampleText(
-                  examples: result.examples,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
             const Divider(height: 24),
-            _ResultFooter(model: result.model, onRetry: onRetry),
+            _ResultFooter(model: results.first.model, onRetry: onRetry),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// 单条结果的内容块：标题（原词/原句 + 译文）+ 语境/词性/例句等分区。
+class _ResultBlock extends StatelessWidget {
+  const _ResultBlock({required this.result, this.onCopy});
+
+  final DictionaryResult result;
+  final VoidCallback? onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppStrings.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (result.rawFallback != null)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: SelectableText(result.rawFallback!)),
+              if (onCopy != null)
+                IconButton(
+                  onPressed: onCopy,
+                  tooltip: l10n.copyResult,
+                  icon: const Icon(Icons.copy_outlined, size: 18),
+                ),
+            ],
+          )
+        else
+          _ResultHeading(result: result, onCopy: onCopy),
+        if (result.context.isNotEmpty ||
+            result.partOfSpeech.isNotEmpty ||
+            result.examples.isNotEmpty)
+          const Divider(height: 36),
+        if (result.context.isNotEmpty) ...[
+          ResultSection(
+            title: l10n.context,
+            child: Text(
+              result.context,
+              style: const TextStyle(fontSize: 15, height: 1.6),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+        if (result.partOfSpeech.isNotEmpty) ...[
+          ResultSection(
+            title: l10n.partOfSpeech,
+            child: Text(
+              result.partOfSpeech,
+              style: const TextStyle(fontSize: 15),
+            ),
+          ),
+          const SizedBox(height: 20),
+        ],
+        if (result.examples.isNotEmpty)
+          ResultSection(
+            title: l10n.examples,
+            child: _ExampleText(
+              examples: result.examples,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+      ],
     );
   }
 }
@@ -163,10 +214,10 @@ class _ErrorResultCard extends StatelessWidget {
 }
 
 class _ResultHeading extends StatelessWidget {
-  const _ResultHeading({required this.result, required this.onCopy});
+  const _ResultHeading({required this.result, this.onCopy});
 
   final DictionaryResult result;
-  final VoidCallback onCopy;
+  final VoidCallback? onCopy;
 
   @override
   Widget build(BuildContext context) {
@@ -203,11 +254,12 @@ class _ResultHeading extends StatelessWidget {
             ],
           ),
         ),
-        IconButton(
-          onPressed: onCopy,
-          tooltip: l10n.copyResult,
-          icon: const Icon(Icons.copy_outlined, size: 18),
-        ),
+        if (onCopy != null)
+          IconButton(
+            onPressed: onCopy,
+            tooltip: l10n.copyResult,
+            icon: const Icon(Icons.copy_outlined, size: 18),
+          ),
       ],
     );
   }
