@@ -174,6 +174,36 @@ void main() {
     viewModel.dispose();
   });
 
+  test('updateLanguagePair replaces a pair and keeps selection in sync', () async {
+    final viewModel = DictionaryViewModel();
+    await Future<void>.delayed(Duration.zero);
+
+    // 修改生效中的组合：生效项同步更新。
+    await viewModel.updateLanguagePair('自动识别 → 中文', '自动识别 → 日语');
+    expect(viewModel.languagePairs, isNot(contains('自动识别 → 中文')));
+    expect(viewModel.languagePairs, contains('自动识别 → 日语'));
+    expect(viewModel.languagePair, '自动识别 → 日语');
+
+    // 修改未生效的组合：生效项不变。
+    await viewModel.selectLanguagePair('英语 → 中文');
+    await viewModel.updateLanguagePair('中文 → 英语', '中文 → 法语');
+    expect(viewModel.languagePair, '英语 → 中文');
+    expect(viewModel.languagePairs, contains('中文 → 法语'));
+
+    // 改成已存在的组合会被去重（拒绝）。
+    final before = viewModel.languagePairs.length;
+    await viewModel.updateLanguagePair('日语 → 中文', '英语 → 中文');
+    expect(viewModel.languagePairs, hasLength(before));
+    expect(viewModel.languagePairs, contains('日语 → 中文'));
+
+    // 空内容或原值不变时无操作。
+    await viewModel.updateLanguagePair('韩语 → 英语', '');
+    await viewModel.updateLanguagePair('韩语 → 英语', '韩语 → 英语');
+    expect(viewModel.languagePairs, contains('韩语 → 英语'));
+
+    viewModel.dispose();
+  });
+
   test('clearLogs empties the call logs', () async {
     final viewModel = DictionaryViewModel();
     await Future<void>.delayed(Duration.zero);

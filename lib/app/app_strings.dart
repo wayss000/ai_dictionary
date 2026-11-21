@@ -85,6 +85,7 @@ class AppStrings {
       _choose('至少保留一个组合', 'Keep at least one language pair');
   String get delete => _choose('删除', 'Delete');
   String get addPair => _choose('新增语言组合', 'Add language pair');
+  String get editPair => _choose('编辑语言组合', 'Edit language pair');
   String get pairLabel =>
       _choose('语言组合（输入语言 → 输出语言）', 'Language pair (source → target)');
   String get pairExample => _choose('例如 法语 → 中文', 'e.g. French → Chinese');
@@ -111,6 +112,7 @@ class AppStrings {
   String get keepOnePrompt => _choose('至少保留一个模板', 'Keep at least one template');
   String get edit => _choose('编辑', 'Edit');
   String get promptSaved => _choose('提示词已保存并生效', 'Prompt saved and activated');
+  String get pairSaved => _choose('语言组合已保存', 'Language pair saved');
   String get chatGptPlan => _choose('ChatGPT 套餐', 'ChatGPT plan');
   String get noLogs => _choose(
     '暂无调用记录，去解释几个词吧。',

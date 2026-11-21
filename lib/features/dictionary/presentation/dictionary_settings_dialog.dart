@@ -87,6 +87,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   final _langController = TextEditingController();
   final _promptNameController = TextEditingController();
   final _promptContentController = TextEditingController();
+  String? _editingPair;
 
   bool _obscureApiKey = true;
   bool _isTesting = false;
@@ -753,27 +754,40 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                       ],
                     ],
                   ),
-                  secondary: IconButton(
-                    onPressed: viewModel.languagePairs.length <= 1
-                        ? null
-                        : () => viewModel.deleteLanguagePair(pair),
-                    icon: Icon(
-                      Icons.delete_outline,
-                      size: 18,
-                      color: viewModel.languagePairs.length <= 1
-                          ? Colors.black26
-                          : theme.colorScheme.error,
-                    ),
-                    tooltip: viewModel.languagePairs.length <= 1
-                        ? l10n.keepOnePair
-                        : l10n.delete,
+                  secondary: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        onPressed: () => _startPairEdit(pair),
+                        icon: const Icon(Icons.edit_outlined, size: 18),
+                        tooltip: l10n.edit,
+                      ),
+                      IconButton(
+                        onPressed: viewModel.languagePairs.length <= 1
+                            ? null
+                            : () => viewModel.deleteLanguagePair(pair),
+                        icon: Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: viewModel.languagePairs.length <= 1
+                              ? Colors.black26
+                              : theme.colorScheme.error,
+                        ),
+                        tooltip: viewModel.languagePairs.length <= 1
+                            ? l10n.keepOnePair
+                            : l10n.delete,
+                      ),
+                    ],
                   ),
                 ),
             ],
           ),
         ),
         const Divider(height: 24),
-        Text(l10n.addPair, style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(
+          _editingPair == null ? l10n.addPair : l10n.editPair,
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
         const SizedBox(height: 8),
         _buildField(
           label: l10n.pairLabel,
@@ -784,20 +798,56 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         Row(
           children: [
             const Spacer(),
+            if (_editingPair != null)
+              TextButton(
+                onPressed: _resetPairForm,
+                child: Text(l10n.cancelEdit),
+              ),
+            const SizedBox(width: 4),
             FilledButton.icon(
-              onPressed: () async {
-                final text = _langController.text.trim();
-                if (text.isEmpty) return;
-                await widget.viewModel.addLanguagePair(text);
-                _langController.clear();
-              },
-              icon: const Icon(Icons.add, size: 16),
-              label: Text(l10n.add),
+              onPressed: _langController.text.trim().isEmpty
+                  ? null
+                  : _savePair,
+              icon: Icon(
+                _editingPair == null ? Icons.add : Icons.check,
+                size: 16,
+              ),
+              label: Text(_editingPair == null ? l10n.add : l10n.saveChanges),
             ),
           ],
         ),
       ],
     );
+  }
+
+  void _startPairEdit(String pair) {
+    setState(() {
+      _editingPair = pair;
+      _langController.text = pair;
+    });
+  }
+
+  void _resetPairForm() {
+    setState(() {
+      _editingPair = null;
+      _langController.clear();
+    });
+  }
+
+  Future<void> _savePair() async {
+    final text = _langController.text.trim();
+    if (text.isEmpty) return;
+    final editing = _editingPair;
+    if (editing != null) {
+      await widget.viewModel.updateLanguagePair(editing, text);
+    } else {
+      await widget.viewModel.addLanguagePair(text);
+    }
+    if (!mounted) return;
+    _resetPairForm();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.pairSaved)));
   }
 
   /// 提示词管理页签：切换 / 新增 / 编辑 / 删除提示词模板。

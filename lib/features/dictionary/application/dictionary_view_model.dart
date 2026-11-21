@@ -126,6 +126,24 @@ class DictionaryViewModel extends ChangeNotifier {
     _notify();
   }
 
+  /// 修改已有语言组合（去重）；若修改的是生效组合，则同步更新生效项。
+  Future<void> updateLanguagePair(String oldPair, String newPair) async {
+    final text = newPair.trim();
+    if (text.isEmpty || text == oldPair) return;
+    if (!_langStore.pairs.contains(oldPair)) return;
+    if (_langStore.pairs.contains(text)) return;
+    final index = _langStore.pairs.indexOf(oldPair);
+    final pairs = [..._langStore.pairs]..[index] = text;
+    var selected = _langStore.selected;
+    if (selected == oldPair) {
+      selected = text;
+      _languagePair = text;
+    }
+    _langStore = LanguagePairStore(pairs: pairs, selected: selected);
+    await _langStore.save();
+    _notify();
+  }
+
   /// 删除语言组合；若删除的是生效组合则切到第一个剩余组合。至少保留一个。
   Future<void> deleteLanguagePair(String languagePair) async {
     if (_langStore.pairs.length <= 1) return;
