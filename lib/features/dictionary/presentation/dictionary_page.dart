@@ -33,6 +33,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
   }
 
   String _resultToPlainText(DictionaryResult result) {
+    if (result.rawFallback != null) return result.rawFallback!;
     final buffer = StringBuffer()
       ..writeln('${result.term}：${result.translation}');
     if (result.context.isNotEmpty) {

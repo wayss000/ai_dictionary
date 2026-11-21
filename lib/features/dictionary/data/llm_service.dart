@@ -15,6 +15,7 @@ class DictionaryResult {
     required this.partOfSpeech,
     required this.examples,
     required this.model,
+    this.rawFallback,
   });
 
   final String term;
@@ -23,6 +24,7 @@ class DictionaryResult {
   final String partOfSpeech;
   final List<WordExample> examples;
   final String model;
+  final String? rawFallback;
 }
 
 class WordExample {
@@ -193,7 +195,23 @@ class LlmService {
   }
 
   DictionaryResult _parseResult(String rawContent, String model) {
-    final json = _extractJson(rawContent);
+    Map<String, dynamic> json;
+    try {
+      json = _extractJson(rawContent);
+      if ((json['term']?.toString() ?? '').isEmpty) {
+        throw LlmException('模型返回的数据格式不完整。');
+      }
+    } on LlmException {
+      return DictionaryResult(
+        term: '',
+        translation: '',
+        context: '',
+        partOfSpeech: '',
+        examples: const [],
+        model: model,
+        rawFallback: rawContent,
+      );
+    }
     final examples = <WordExample>[];
     if (json['examples'] is List) {
       for (final item in json['examples'] as List) {
@@ -210,10 +228,6 @@ class LlmService {
     }
 
     final term = json['term']?.toString() ?? '';
-    if (term.isEmpty) {
-      throw LlmException('模型返回的数据格式不完整，请重试。');
-    }
-
     return DictionaryResult(
       term: term,
       translation: json['translation']?.toString() ?? '',
