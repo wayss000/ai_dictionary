@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../data/chatgpt_plan.dart';
 import '../data/llm_call_log.dart';
 import '../data/llm_config.dart';
 import '../data/llm_service.dart';
@@ -28,6 +29,7 @@ class DictionaryViewModel extends ChangeNotifier {
   bool _hasResult = false;
   bool _hasError = false;
   String? _errorMessage;
+  String? _englishErrorMessage;
   DictionaryResult? _result;
   bool _isDisposed = false;
 
@@ -43,6 +45,7 @@ class DictionaryViewModel extends ChangeNotifier {
   bool get hasResult => _hasResult;
   bool get hasError => _hasError;
   String? get errorMessage => _errorMessage;
+  String? get englishErrorMessage => _englishErrorMessage;
   DictionaryResult? get result => _result;
 
   /// 界面上展示的模型名：已配置显示真实模型名，否则显示“默认模型”。
@@ -189,6 +192,7 @@ class DictionaryViewModel extends ChangeNotifier {
     _hasResult = false;
     _hasError = false;
     _errorMessage = null;
+    _englishErrorMessage = null;
     notifyListeners();
 
     final word = query.trim();
@@ -234,6 +238,8 @@ class DictionaryViewModel extends ChangeNotifier {
       stopwatch.stop();
       if (_isDisposed) return;
       _hasError = true;
+      _englishErrorMessage =
+          'The request timed out after $seconds seconds. Increase the model timeout in Settings or try a faster model.';
       _errorMessage = '请求超时（$seconds 秒）。可在设置中调大该模型的超时时间，或换用更快的模型。';
       _addLog(
         _errorLog(
@@ -250,6 +256,7 @@ class DictionaryViewModel extends ChangeNotifier {
       if (_isDisposed) return;
       _hasError = true;
       _errorMessage = error.message;
+      _englishErrorMessage = error.englishMessage ?? error.message;
       _addLog(
         _errorLog(
           word,
@@ -265,6 +272,10 @@ class DictionaryViewModel extends ChangeNotifier {
       if (_isDisposed) return;
       _hasError = true;
       _errorMessage = '请求出错：$error';
+      final detail = error is ChatGptPlanException
+          ? error.englishMessage ?? error.message
+          : error.toString();
+      _englishErrorMessage = 'Request error: $detail';
       _addLog(
         _errorLog(
           word,

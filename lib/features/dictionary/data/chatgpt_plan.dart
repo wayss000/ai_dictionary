@@ -11,7 +11,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ChatGptPlanException implements Exception {
-  const ChatGptPlanException(this.message);
+  const ChatGptPlanException(this.message, {this.englishMessage});
+  final String? englishMessage;
   final String message;
 
   @override
@@ -87,40 +88,78 @@ class ChatGptPlan {
     String? detail,
   }) {
     final regionDetail = detail?.toLowerCase() ?? '';
-    final message = switch (code) {
-      'subscription_sharing_user_not_eligible' =>
+    final (message, englishMessage) = switch (code) {
+      'subscription_sharing_user_not_eligible' => (
         '所选 ChatGPT 账号或工作区当前无法在此应用使用套餐额度。',
+        'The selected ChatGPT account or workspace cannot use its plan allowance in this app.',
+      ),
       'subscription_sharing_usage_unavailable' ||
-      'subscription_sharing_user_unavailable' => '暂时无法检查 ChatGPT 套餐用量，请稍后重试。',
-      'subscription_sharing_usage_limit_exceeded' =>
+      'subscription_sharing_user_unavailable' => (
+        '暂时无法检查 ChatGPT 套餐用量，请稍后重试。',
+        'ChatGPT plan usage is temporarily unavailable. Try again later.',
+      ),
+      'subscription_sharing_usage_limit_exceeded' => (
         '已达到 ChatGPT 用量限制，请稍后重试或切换模型配置。',
-      'subscription_sharing_route_not_supported' => 'OpenAI 套餐接口不支持此请求路径。',
+        'ChatGPT usage limit reached. Try again later or switch models.',
+      ),
+      'subscription_sharing_route_not_supported' => (
+        'OpenAI 套餐接口不支持此请求路径。',
+        'The OpenAI plan API does not support this request path.',
+      ),
       'chatpass_v2_scope_not_authorized' ||
-      'chatpass_v2_invalid_authorization_context' =>
+      'chatpass_v2_invalid_authorization_context' => (
         'OpenAI 拒绝了此操作的套餐授权，请检查所选账号和应用授权。',
-      'unsupported_country_region_territory' => 'OpenAI 拒绝了当前地区的 API 请求。',
-      'invalid_grant' ||
-      'subscription_sharing_invalid_user' => 'ChatGPT 会话已失效，请在模型配置中重新登录。',
+        'OpenAI denied plan authorization for this operation. Check the account and app permissions.',
+      ),
+      'unsupported_country_region_territory' => (
+        'OpenAI 拒绝了当前地区的 API 请求。',
+        'OpenAI denied the API request from this region.',
+      ),
+      'invalid_grant' || 'subscription_sharing_invalid_user' => (
+        'ChatGPT 会话已失效，请在模型配置中重新登录。',
+        'The ChatGPT session expired. Sign in again in model settings.',
+      ),
       _ => switch (status) {
-        401 => 'ChatGPT 会话无法验证，请在模型配置中重新登录。',
+        401 => (
+          'ChatGPT 会话无法验证，请在模型配置中重新登录。',
+          'Could not verify the ChatGPT session. Sign in again in model settings.',
+        ),
         403
             when regionDetail.contains('region') ||
                 regionDetail.contains('country') ||
                 regionDetail.contains('territory') =>
-          'OpenAI 拒绝了当前地区的 API 请求。',
-        403 => 'OpenAI 拒绝了此请求。请检查当前账号、工作区或地区是否支持套餐接入。',
-        429 => '已达到 ChatGPT 用量限制，请稍后重试或切换模型配置。',
-        _ => 'ChatGPT 未能完成请求，请重试。',
+          (
+            'OpenAI 拒绝了当前地区的 API 请求。',
+            'OpenAI denied the API request from this region.',
+          ),
+        403 => (
+          'OpenAI 拒绝了此请求。请检查当前账号、工作区或地区是否支持套餐接入。',
+          'OpenAI denied the request. Check whether your account, workspace, or region supports plan access.',
+        ),
+        429 => (
+          '已达到 ChatGPT 用量限制，请稍后重试或切换模型配置。',
+          'ChatGPT usage limit reached. Try again later or switch models.',
+        ),
+        _ => (
+          'ChatGPT 未能完成请求，请重试。',
+          'ChatGPT could not complete the request. Try again.',
+        ),
       },
     };
     final safeId = RegExp(r'^[A-Za-z0-9_-]{1,100}$');
     final diagnostics = [
       if (status != null) 'HTTP $status',
       if (code is String && safeId.hasMatch(code)) code,
-      if (requestId != null && safeId.hasMatch(requestId)) '请求 ID $requestId',
+      if (requestId != null && safeId.hasMatch(requestId))
+        'Request ID $requestId',
     ];
     return ChatGptPlanException(
-      diagnostics.isEmpty ? message : '$message（${diagnostics.join(' · ')}）',
+      diagnostics.isEmpty
+          ? message
+          : '$message（${diagnostics.join(' · ').replaceAll('Request ID ', '请求 ID ')}）',
+      englishMessage: diagnostics.isEmpty
+          ? englishMessage
+          : '$englishMessage (${diagnostics.join(' · ')})',
     );
   }
 
@@ -215,7 +254,12 @@ class ChatGptPlan {
         }),
         mode: LaunchMode.externalApplication,
       );
-      if (!launched) throw const ChatGptPlanException('无法打开系统浏览器。');
+      if (!launched) {
+        throw const ChatGptPlanException(
+          '无法打开系统浏览器。',
+          englishMessage: 'Could not open the system browser.',
+        );
+      }
       final waiting = callback.future;
       params =
           await (cancelled == null
@@ -223,14 +267,19 @@ class ChatGptPlan {
                   : Future.any([
                       waiting,
                       cancelled.then<Map<String, String>>(
-                        (_) =>
-                            throw const ChatGptPlanException('已取消 ChatGPT 登录。'),
+                        (_) => throw const ChatGptPlanException(
+                          '已取消 ChatGPT 登录。',
+                          englishMessage: 'ChatGPT sign-in was canceled.',
+                        ),
                       ),
                     ]))
               .timeout(
                 const Duration(minutes: 3),
                 onTimeout: () {
-                  throw const ChatGptPlanException('ChatGPT 登录超时，请重试。');
+                  throw const ChatGptPlanException(
+                    'ChatGPT 登录超时，请重试。',
+                    englishMessage: 'ChatGPT sign-in timed out. Try again.',
+                  );
                 },
               );
     } finally {
@@ -245,7 +294,11 @@ class ChatGptPlan {
         issued == null ||
         issued == 'dynamic_agent_client' ||
         (clientId != null && issued != clientId)) {
-      throw const ChatGptPlanException('ChatGPT 授权未完成，请重新登录并授权套餐用量。');
+      throw const ChatGptPlanException(
+        'ChatGPT 授权未完成，请重新登录并授权套餐用量。',
+        englishMessage:
+            'ChatGPT authorization is incomplete. Sign in again and authorize plan usage.',
+      );
     }
     final tokens = await _exchange({
       'grant_type': 'authorization_code',
@@ -257,7 +310,11 @@ class ChatGptPlan {
     final idToken = tokens['id_token'] as String;
     final claims = await _validateIdentity(idToken, issued, nonce);
     if (saved != null && saved['subject'] != claims['sub']) {
-      throw const ChatGptPlanException('登录账号与此配置不匹配。');
+      throw const ChatGptPlanException(
+        '登录账号与此配置不匹配。',
+        englishMessage:
+            'The signed-in account does not match this configuration.',
+      );
     }
     await _saveTokens(id, {
       'client_id': issued,
@@ -308,7 +365,10 @@ class ChatGptPlan {
         expiry <= DateTime.now().millisecondsSinceEpoch / 1000 ||
         subject is! String ||
         subject.isEmpty) {
-      throw const ChatGptPlanException('无法验证 ChatGPT 登录身份，请重试。');
+      throw const ChatGptPlanException(
+        '无法验证 ChatGPT 登录身份，请重试。',
+        englishMessage: 'Could not verify the ChatGPT account. Try again.',
+      );
     }
     return claims;
   }
@@ -323,7 +383,11 @@ class ChatGptPlan {
     final refresh = tokens['refresh_token'] ?? saved['refresh_token'];
     final expires = tokens['expires_in'];
     if (!scope.split(RegExp(r'\s+')).contains(_scope)) {
-      throw const ChatGptPlanException('请在登录时允许 AI Dictionary 使用 ChatGPT 套餐。');
+      throw const ChatGptPlanException(
+        '请在登录时允许 AI Dictionary 使用 ChatGPT 套餐。',
+        englishMessage:
+            'Allow AI Dictionary to use your ChatGPT plan when you sign in.',
+      );
     }
     if (access is! String ||
         access.isEmpty ||
@@ -331,7 +395,11 @@ class ChatGptPlan {
         refresh.isEmpty ||
         expires is! num ||
         expires <= 0) {
-      throw const ChatGptPlanException('ChatGPT 未返回有效的套餐凭证，请重新登录。');
+      throw const ChatGptPlanException(
+        'ChatGPT 未返回有效的套餐凭证，请重新登录。',
+        englishMessage:
+            'ChatGPT returned no valid plan credentials. Sign in again.',
+      );
     }
     await _storage.write(
       key: _key(id),
@@ -352,7 +420,10 @@ class ChatGptPlan {
         try {
           final saved = await _session(id);
           if (saved == null) {
-            throw const ChatGptPlanException('请在模型配置中登录 ChatGPT。');
+            throw const ChatGptPlanException(
+              '请在模型配置中登录 ChatGPT。',
+              englishMessage: 'Sign in to ChatGPT in model settings.',
+            );
           }
           if ((saved['expires_at'] as int) >
               DateTime.now()
@@ -484,7 +555,10 @@ class ChatGptPlan {
         case 'response.completed':
           final usage = (event['response'] as Map?)?['usage'] as Map?;
           if (output.isEmpty) {
-            throw const ChatGptPlanException('ChatGPT 未返回文本。');
+            throw const ChatGptPlanException(
+              'ChatGPT 未返回文本。',
+              englishMessage: 'ChatGPT returned no text.',
+            );
           }
           return (
             text: output.toString(),
@@ -498,6 +572,9 @@ class ChatGptPlan {
           throw _requestError(error?['code'] ?? event['code'], null);
       }
     }
-    throw const ChatGptPlanException('ChatGPT 响应中断，请重试。');
+    throw const ChatGptPlanException(
+      'ChatGPT 响应中断，请重试。',
+      englishMessage: 'The ChatGPT response was interrupted. Try again.',
+    );
   }
 }

@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../app/app_strings.dart';
+
 import '../application/dictionary_view_model.dart';
 import '../data/llm_call_log.dart';
 import '../data/chatgpt_plan.dart';
@@ -9,21 +11,31 @@ import '../data/llm_config.dart';
 import '../data/llm_service.dart';
 import '../data/prompt_store.dart';
 
-/// 打开设置面板：模型配置 / 调用日志 / 语言组合 / 提示词管理。
+/// 打开词典设置面板。
 Future<void> showDictionarySettingsDialog(
   BuildContext context, {
   required DictionaryViewModel viewModel,
+  required Future<bool> Function(Locale) onLocaleSelected,
   int initialTab = 0,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (context) =>
-        _SettingsPanel(viewModel: viewModel, initialTab: initialTab),
+    builder: (context) => _SettingsPanel(
+      viewModel: viewModel,
+      initialTab: initialTab,
+      onLocaleSelected: onLocaleSelected,
+    ),
   );
 }
 
 class _SettingsPanel extends StatefulWidget {
-  const _SettingsPanel({required this.viewModel, this.initialTab = 0});
+  const _SettingsPanel({
+    required this.viewModel,
+    required this.onLocaleSelected,
+    required this.initialTab,
+  });
+
+  final Future<bool> Function(Locale) onLocaleSelected;
 
   final DictionaryViewModel viewModel;
   final int initialTab;
@@ -33,7 +45,20 @@ class _SettingsPanel extends StatefulWidget {
 }
 
 class _SettingsPanelState extends State<_SettingsPanel> {
+  AppStrings get l10n => AppStrings.of(context);
+
+  String _errorDetails(Object error) {
+    if (!l10n.isEnglish) return error.toString();
+    return switch (error) {
+      LlmException(:final englishMessage) => englishMessage ?? error.toString(),
+      ChatGptPlanException(:final englishMessage) =>
+        englishMessage ?? error.toString(),
+      _ => error.toString(),
+    };
+  }
+
   String? _editingId;
+  bool _savingLocale = false;
   LlmProvider _provider = LlmProvider.custom;
   String? _draftChatGptId;
   Map<String, String> _chatGptModels = {};
@@ -65,7 +90,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
 
   bool _obscureApiKey = true;
   bool _isTesting = false;
-  String? _testMessage;
+  String Function()? _testMessage;
   bool _testSucceeded = false;
 
   @override
@@ -130,7 +155,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       _chatGptModels = {};
       _testMessage = null;
     });
-    var stage = signIn ? '完成 ChatGPT 登录' : '加载 ChatGPT 模型';
+    var signingIn = signIn;
     try {
       if (signIn) {
         final email = await ChatGptPlan.instance.signIn(
@@ -142,11 +167,16 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           _chatGptEmail = email;
           _loginCancellation = null;
         });
-        stage = '加载 ChatGPT 模型';
+        signingIn = false;
       }
       final models = await ChatGptPlan.instance.models(id);
       if (models.isEmpty) {
-        throw const ChatGptPlanException('这个 ChatGPT 账号没有可用的模型。');
+        throw ChatGptPlanException(
+          const AppStrings(AppStrings.simplifiedChinese).noAvailableModels,
+          englishMessage: const AppStrings(
+            AppStrings.english,
+          ).noAvailableModels,
+        );
       }
       if (!mounted) return;
       setState(() {
@@ -164,7 +194,10 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       if (!mounted) return;
       setState(() {
         _testSucceeded = false;
-        _testMessage = '$stage 失败。$error';
+        _testMessage = () => l10n.stageFailed(
+          signingIn ? l10n.finishSignIn : l10n.loadModels,
+          _errorDetails(error),
+        );
       });
     } finally {
       _loginCancellation = null;
@@ -209,13 +242,13 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       if (!mounted) return;
       setState(() {
         _testSucceeded = true;
-        _testMessage = '连接成功，配置可用。';
+        _testMessage = () => l10n.connectionSucceeded;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _testSucceeded = false;
-        _testMessage = error.toString();
+        _testMessage = () => _errorDetails(error);
       });
     } finally {
       if (mounted) setState(() => _isTesting = false);
@@ -231,7 +264,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       _resetForm();
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('已保存并生效')));
+      ).showSnackBar(SnackBar(content: Text(l10n.savedAndActive)));
     } catch (error) {
       if (!mounted) {
         _discardDraft();
@@ -239,7 +272,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       }
       setState(() {
         _testSucceeded = false;
-        _testMessage = error.toString();
+        _testMessage = () => _errorDetails(error);
       });
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -255,14 +288,14 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       await widget.viewModel.deleteProfile(profile.id);
       if (!mounted) return;
       if (_editingId == profile.id) _resetForm();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('已删除 ${profile.displayName}')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.deleted(profile.displayName))),
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _testSucceeded = false;
-        _testMessage = error.toString();
+        _testMessage = () => _errorDetails(error);
       });
     } finally {
       if (mounted) setState(() => _isSaving = false);
@@ -286,7 +319,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           children: [
             const Icon(Icons.tune, size: 22),
             const SizedBox(width: 8),
-            const Text('设置'),
+            Text(l10n.settings),
           ],
         ),
         content: SizedBox(
@@ -302,6 +335,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                   1 => _buildLogTab(theme),
                   2 => _buildLanguageTab(theme),
                   3 => _buildPromptTab(theme),
+                  4 => _buildInterfaceLanguageTab(),
                   _ => _buildModelTab(theme),
                 },
               ),
@@ -311,7 +345,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('关闭'),
+            child: Text(l10n.close),
           ),
         ],
       ),
@@ -321,13 +355,19 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   Widget _buildSidebar(ThemeData theme) {
     return SizedBox(
       width: 128,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: ListView(
+        padding: EdgeInsets.zero,
         children: [
-          _sideItem(theme, 0, Icons.tune_outlined, '模型配置'),
-          _sideItem(theme, 1, Icons.receipt_long_outlined, '调用日志'),
-          _sideItem(theme, 2, Icons.translate_outlined, '语言组合'),
-          _sideItem(theme, 3, Icons.description_outlined, '提示词管理'),
+          _sideItem(theme, 0, Icons.tune_outlined, l10n.modelSettings),
+          _sideItem(theme, 1, Icons.receipt_long_outlined, l10n.callLogs),
+          _sideItem(theme, 2, Icons.translate_outlined, l10n.languagePairs),
+          _sideItem(
+            theme,
+            3,
+            Icons.description_outlined,
+            l10n.promptManagement,
+          ),
+          _sideItem(theme, 4, Icons.language, l10n.interfaceLanguage),
         ],
       ),
     );
@@ -355,14 +395,16 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                   color: selected ? theme.colorScheme.primary : Colors.black54,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected
-                        ? theme.colorScheme.primary
-                        : Colors.black87,
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                      color: selected
+                          ? theme.colorScheme.primary
+                          : Colors.black87,
+                    ),
                   ),
                 ),
               ],
@@ -373,6 +415,52 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     );
   }
 
+  Widget _buildInterfaceLanguageTab() {
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        RadioGroup<Locale>(
+          groupValue: l10n.locale,
+          onChanged: (locale) {
+            if (locale != null) _changeLocale(locale);
+          },
+          child: Column(
+            children: [
+              RadioListTile<Locale>(
+                value: AppStrings.simplifiedChinese,
+                title: const Text('简体中文'),
+                enabled: !_savingLocale,
+              ),
+              RadioListTile<Locale>(
+                value: AppStrings.english,
+                title: const Text('English'),
+                enabled: !_savingLocale,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _changeLocale(Locale locale) async {
+    if (_savingLocale || locale == l10n.locale) return;
+    setState(() => _savingLocale = true);
+    var saved = false;
+    try {
+      saved = await widget.onLocaleSelected(locale);
+    } on Exception catch (error) {
+      debugPrint(error.toString());
+    }
+    if (!mounted) return;
+    setState(() => _savingLocale = false);
+    if (!saved) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.languageSaveFailed)));
+    }
+  }
+
   Widget _buildModelTab(ThemeData theme) {
     final viewModel = widget.viewModel;
     // 用 ListView 让整个页签可滚动，避免内容过高时按钮被裁切。
@@ -380,16 +468,16 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       padding: EdgeInsets.zero,
       children: [
         Text(
-          '已保存的模型（点选切换生效）',
+          l10n.savedModels,
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
         const SizedBox(height: 4),
         if (viewModel.profiles.isEmpty)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
-              '还没有配置，在下方新增一个模型配置。',
-              style: TextStyle(color: Colors.black38),
+              l10n.noModels,
+              style: const TextStyle(color: Colors.black38),
             ),
           )
         else
@@ -407,17 +495,20 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           ),
         const Divider(height: 24),
         Text(
-          _editingId == null ? '新增模型配置' : '编辑模型配置',
+          _editingId == null ? l10n.addModel : l10n.editModel,
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         if (_editingId == null) ...[
           SegmentedButton<LlmProvider>(
-            segments: const [
-              ButtonSegment(value: LlmProvider.custom, label: Text('自定义模型')),
+            segments: [
+              ButtonSegment(
+                value: LlmProvider.custom,
+                label: Text(l10n.customModel),
+              ),
               ButtonSegment(
                 value: LlmProvider.chatGpt,
-                label: Text('登录 ChatGPT'),
+                label: Text(l10n.signIn),
               ),
             ],
             selected: {_provider},
@@ -431,15 +522,15 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           const SizedBox(height: 12),
         ],
         _buildField(
-          label: '名称（选填）',
-          hint: '例如 智谱 / 硅基流动',
+          label: l10n.optionalName,
+          hint: l10n.modelNameExample,
           controller: _nameController,
         ),
         const SizedBox(height: 10),
         if (_provider == LlmProvider.custom) ...[
           _buildField(
-            label: 'API 地址',
-            hint: '例如 https://api.openai.com/v1',
+            label: l10n.apiUrl,
+            hint: l10n.apiUrlExample,
             controller: _baseUrlController,
           ),
           const SizedBox(height: 10),
@@ -463,14 +554,14 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                       : Icons.visibility_off_outlined,
                   size: 20,
                 ),
-                tooltip: _obscureApiKey ? '显示' : '隐藏',
+                tooltip: _obscureApiKey ? l10n.show : l10n.hide,
               ),
             ],
           ),
           const SizedBox(height: 10),
           _buildField(
-            label: '模型名称',
-            hint: '例如 glm-4-flash、Qwen/Qwen3.5-4B',
+            label: l10n.modelName,
+            hint: l10n.modelExample,
             controller: _modelController,
           ),
           const SizedBox(height: 10),
@@ -486,20 +577,20 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                     : () => _loadChatGptModels(signIn: true),
                 child: Text(
                   _editingId == null && _chatGptEmail == null
-                      ? '使用 ChatGPT 继续'
-                      : '重新登录 ChatGPT',
+                      ? l10n.continueWithChatGpt
+                      : l10n.signInAgain,
                 ),
               ),
               if (_editingId != null || _chatGptEmail != null)
                 OutlinedButton(
                   onPressed: _busy ? null : () => _loadChatGptModels(),
-                  child: const Text('重新加载模型'),
+                  child: Text(l10n.reloadModels),
                 ),
               if (_isLoadingModels) ...[
                 Text(
                   _loginCancellation != null
-                      ? '正在等待 ChatGPT 登录…'
-                      : '正在加载 ChatGPT 模型…',
+                      ? l10n.waitingForSignIn
+                      : l10n.loadingModels,
                 ),
                 if (_loginCancellation != null)
                   TextButton(
@@ -509,7 +600,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                         cancellation.complete();
                       }
                     },
-                    child: const Text('取消登录'),
+                    child: Text(l10n.cancelSignIn),
                   ),
               ] else if (_chatGptEmail != null)
                 Text(_chatGptEmail!),
@@ -517,11 +608,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           ),
           const SizedBox(height: 8),
           if (_chatGptModels.isEmpty)
-            Text(
-              _chatGptEmail == null
-                  ? '登录并授权套餐用量后，可选择账号可用的模型。'
-                  : '已登录 ChatGPT。加载模型后即可选择。',
-            )
+            Text(_chatGptEmail == null ? l10n.signInHelp : l10n.signedInHelp)
           else
             DropdownButtonFormField<String>(
               key: ValueKey(_chatGptModels),
@@ -529,7 +616,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
               initialValue: _chatGptModels.containsKey(_modelController.text)
                   ? _modelController.text
                   : null,
-              decoration: const InputDecoration(labelText: 'ChatGPT 模型'),
+              decoration: InputDecoration(labelText: l10n.chatGptModel),
               items: [
                 for (final entry in _chatGptModels.entries)
                   DropdownMenuItem(
@@ -547,8 +634,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           const SizedBox(height: 10),
         ],
         _buildField(
-          label: '超时时间（秒）',
-          hint: '默认 60，最小 5',
+          label: l10n.timeout,
+          hint: l10n.timeoutHint,
           controller: _timeoutController,
           keyboardType: TextInputType.number,
         ),
@@ -564,7 +651,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  _testMessage!,
+                  _testMessage!(),
                   style: TextStyle(
                     fontSize: 13,
                     color: _testSucceeded
@@ -588,27 +675,27 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.network_check, size: 16),
-              label: const Text('测试连接'),
+              label: Text(l10n.testConnection),
             ),
             const Spacer(),
             if (_editingId != null)
               TextButton(
                 onPressed: _busy ? null : _resetForm,
-                child: const Text('取消编辑'),
+                child: Text(l10n.cancelEdit),
               ),
             const SizedBox(width: 4),
             FilledButton.icon(
               onPressed: _busy || !_canSave ? null : _save,
               icon: const Icon(Icons.check, size: 16),
-              label: Text(_editingId == null ? '保存并生效' : '保存修改'),
+              label: Text(
+                _editingId == null ? l10n.saveAndActivate : l10n.saveChanges,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 4),
         Text(
-          _provider == LlmProvider.chatGpt
-              ? '使用当前 ChatGPT 账号的套餐用量。'
-              : 'API Key 保存在本机，用于请求所配置的服务。',
+          _provider == LlmProvider.chatGpt ? l10n.planUsage : l10n.apiKeyHelp,
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black45),
         ),
       ],
@@ -622,7 +709,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       padding: EdgeInsets.zero,
       children: [
         Text(
-          '已保存的语言组合（点选切换生效）',
+          l10n.savedPairs,
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
         const SizedBox(height: 4),
@@ -642,7 +729,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                     children: [
                       Flexible(
                         child: Text(
-                          pair,
+                          l10n.pairName(pair),
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontWeight: pair == viewModel.languagePair
@@ -659,8 +746,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                           color: Colors.green,
                         ),
                         const SizedBox(width: 4),
-                        const Text(
-                          '生效中',
+                        Text(
+                          l10n.active,
                           style: TextStyle(fontSize: 12, color: Colors.green),
                         ),
                       ],
@@ -678,19 +765,19 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                           : theme.colorScheme.error,
                     ),
                     tooltip: viewModel.languagePairs.length <= 1
-                        ? '至少保留一个组合'
-                        : '删除',
+                        ? l10n.keepOnePair
+                        : l10n.delete,
                   ),
                 ),
             ],
           ),
         ),
         const Divider(height: 24),
-        Text('新增语言组合', style: const TextStyle(fontWeight: FontWeight.w600)),
+        Text(l10n.addPair, style: const TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         _buildField(
-          label: '语言组合（输入语言 → 输出语言）',
-          hint: '例如 法语 → 中文',
+          label: l10n.pairLabel,
+          hint: l10n.pairExample,
           controller: _langController,
         ),
         const SizedBox(height: 12),
@@ -705,7 +792,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                 _langController.clear();
               },
               icon: const Icon(Icons.add, size: 16),
-              label: const Text('添加'),
+              label: Text(l10n.add),
             ),
           ],
         ),
@@ -720,7 +807,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       padding: EdgeInsets.zero,
       children: [
         Text(
-          '已保存的提示词模板（点选切换生效）',
+          l10n.savedPrompts,
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
         ),
         const SizedBox(height: 4),
@@ -738,21 +825,21 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         ),
         const Divider(height: 24),
         Text(
-          _editingPromptId == null ? '新增提示词模板' : '编辑提示词模板',
+          _editingPromptId == null ? l10n.addPrompt : l10n.editPrompt,
           style: const TextStyle(fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         _buildField(
-          label: '名称（选填）',
-          hint: '例如 简短词典 / 详细解释',
+          label: l10n.optionalName,
+          hint: l10n.promptNameExample,
           controller: _promptNameController,
         ),
         const SizedBox(height: 10),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              '提示词内容',
+            Text(
+              l10n.promptContent,
               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
             const SizedBox(height: 4),
@@ -762,8 +849,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
               minLines: 4,
               // 提示词保存按钮的启用状态依赖内容，输入时需要实时刷新。
               onChanged: (_) => setState(() {}),
-              decoration: const InputDecoration(
-                hintText: '支持 {word}（用户输入的单词）和 {language}（语言方向）占位符',
+              decoration: InputDecoration(
+                hintText: l10n.promptHint,
                 border: OutlineInputBorder(),
               ),
               style: const TextStyle(fontSize: 13, height: 1.4),
@@ -782,13 +869,13 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                   _resetPromptForm();
                 },
                 icon: const Icon(Icons.restore, size: 16),
-                label: const Text('恢复默认内容'),
+                label: Text(l10n.resetPrompt),
               ),
             const Spacer(),
             if (_editingPromptId != null)
               TextButton(
                 onPressed: _resetPromptForm,
-                child: const Text('取消编辑'),
+                child: Text(l10n.cancelEdit),
               ),
             const SizedBox(width: 4),
             FilledButton.icon(
@@ -796,13 +883,17 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                   ? null
                   : _savePrompt,
               icon: const Icon(Icons.check, size: 16),
-              label: Text(_editingPromptId == null ? '保存并生效' : '保存修改'),
+              label: Text(
+                _editingPromptId == null
+                    ? l10n.saveAndActivate
+                    : l10n.saveChanges,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 4),
         Text(
-          '提示词会与用户输入的单词结合（替换 {word} / {language} 占位符）后，统一发送给当前生效的模型。',
+          l10n.promptHelp,
           style: theme.textTheme.bodySmall?.copyWith(color: Colors.black45),
         ),
       ],
@@ -820,7 +911,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         children: [
           Flexible(
             child: Text(
-              template.name.trim().isEmpty ? '未命名模板' : template.name,
+              _promptName(template),
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
@@ -831,8 +922,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
             const SizedBox(width: 6),
             const Icon(Icons.check_circle, size: 16, color: Colors.green),
             const SizedBox(width: 4),
-            const Text(
-              '生效中',
+            Text(
+              l10n.active,
               style: TextStyle(fontSize: 12, color: Colors.green),
             ),
           ],
@@ -850,7 +941,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           IconButton(
             onPressed: () => _startPromptEdit(template),
             icon: const Icon(Icons.edit_outlined, size: 18),
-            tooltip: '编辑',
+            tooltip: l10n.edit,
           ),
           IconButton(
             onPressed: viewModel.promptTemplates.length <= 1
@@ -863,7 +954,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                   ? Colors.black26
                   : theme.colorScheme.error,
             ),
-            tooltip: viewModel.promptTemplates.length <= 1 ? '至少保留一个模板' : '删除',
+            tooltip: viewModel.promptTemplates.length <= 1
+                ? l10n.keepOnePrompt
+                : l10n.delete,
           ),
         ],
       ),
@@ -876,6 +969,13 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       _promptNameController.text = template.name;
       _promptContentController.text = template.content;
     });
+  }
+
+  String _promptName(PromptTemplate template) {
+    if (template.isDefault && template.name == PromptTemplate.defaultName) {
+      return l10n.defaultPromptName;
+    }
+    return template.name.trim().isEmpty ? l10n.untitledPrompt : template.name;
   }
 
   void _resetPromptForm() {
@@ -891,7 +991,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     if (content.isEmpty) return;
     final id = _editingPromptId ?? PromptStore.newPromptId();
     final name = _promptNameController.text.trim().isEmpty
-        ? '未命名模板'
+        ? l10n.untitledPrompt
         : _promptNameController.text.trim();
     await widget.viewModel.savePrompt(
       PromptTemplate(id: id, name: name, content: content),
@@ -900,7 +1000,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     _resetPromptForm();
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('提示词已保存并生效')));
+    ).showSnackBar(SnackBar(content: Text(l10n.promptSaved)));
   }
 
   Future<void> _deletePrompt(PromptTemplate template) async {
@@ -910,11 +1010,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     if (!mounted) return;
     if (_editingPromptId == template.id) _resetPromptForm();
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          '已删除 ${template.name.trim().isEmpty ? '未命名模板' : template.name}',
-        ),
-      ),
+      SnackBar(content: Text(l10n.deleted(_promptName(template)))),
     );
   }
 
@@ -939,15 +1035,15 @@ class _SettingsPanelState extends State<_SettingsPanel> {
             const SizedBox(width: 6),
             const Icon(Icons.check_circle, size: 16, color: Colors.green),
             const SizedBox(width: 4),
-            const Text(
-              '生效中',
+            Text(
+              l10n.active,
               style: TextStyle(fontSize: 12, color: Colors.green),
             ),
           ],
         ],
       ),
       subtitle: Text(
-        '${profile.model} · ${profile.provider == LlmProvider.chatGpt ? 'ChatGPT 套餐' : profile.baseUrl}',
+        '${profile.model} · ${profile.provider == LlmProvider.chatGpt ? l10n.chatGptPlan : profile.baseUrl}',
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 12),
       ),
@@ -957,7 +1053,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           IconButton(
             onPressed: _busy ? null : () => _startEdit(profile),
             icon: const Icon(Icons.edit_outlined, size: 18),
-            tooltip: '编辑',
+            tooltip: l10n.edit,
           ),
           IconButton(
             onPressed: _busy ? null : () => _delete(profile),
@@ -966,7 +1062,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
               size: 18,
               color: theme.colorScheme.error,
             ),
-            tooltip: '删除',
+            tooltip: l10n.delete,
           ),
         ],
       ),
@@ -976,8 +1072,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
   Widget _buildLogTab(ThemeData theme) {
     final logs = widget.viewModel.logs;
     if (logs.isEmpty) {
-      return const Center(
-        child: Text('暂无调用记录，去解释几个词吧。', style: TextStyle(color: Colors.black38)),
+      return Center(
+        child: Text(l10n.noLogs, style: const TextStyle(color: Colors.black38)),
       );
     }
     return Column(
@@ -985,14 +1081,14 @@ class _SettingsPanelState extends State<_SettingsPanel> {
         Row(
           children: [
             Text(
-              '最近 ${logs.length} 次调用',
+              l10n.recentCalls(logs.length),
               style: theme.textTheme.bodySmall?.copyWith(color: Colors.black54),
             ),
             const Spacer(),
             TextButton.icon(
               onPressed: widget.viewModel.clearLogs,
               icon: const Icon(Icons.delete_sweep_outlined, size: 16),
-              label: const Text('清空'),
+              label: Text(l10n.clear),
             ),
           ],
         ),
@@ -1008,8 +1104,9 @@ class _SettingsPanelState extends State<_SettingsPanel> {
 
   Widget _logTile(ThemeData theme, LlmCallLog log) {
     final tokens = [
-      if (log.promptTokens != null) '输入 ${log.promptTokens} tok',
-      if (log.completionTokens != null) '输出 ${log.completionTokens} tok',
+      if (log.promptTokens != null) l10n.inputTokens(log.promptTokens!),
+      if (log.completionTokens != null)
+        l10n.outputTokens(log.completionTokens!),
     ].join(' · ');
     final duration = log.durationMs >= 1000
         ? '${(log.durationMs / 1000).toStringAsFixed(1)}s'
@@ -1030,14 +1127,14 @@ class _SettingsPanelState extends State<_SettingsPanel> {
       ),
       subtitle: Text(
         '${_formatTime(log.time)} · ${log.model}${tokens.isEmpty ? '' : ' · $tokens'}'
-        '${log.success ? '' : ' · 失败'}',
+        '${log.success ? '' : ' · ${l10n.failed}'}',
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(fontSize: 12),
       ),
       children: [
         if ((log.systemPrompt ?? '').isNotEmpty) ...[
-          const Text(
-            '提示词',
+          Text(
+            l10n.prompt,
             style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
           ),
           const SizedBox(height: 4),
@@ -1052,8 +1149,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '输入',
+              Text(
+                l10n.input,
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
               ),
               const SizedBox(height: 4),
@@ -1062,8 +1159,8 @@ class _SettingsPanelState extends State<_SettingsPanel> {
                 style: const TextStyle(fontSize: 13, height: 1.4),
               ),
               const SizedBox(height: 10),
-              const Text(
-                '输出',
+              Text(
+                l10n.output,
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
               ),
               const SizedBox(height: 4),

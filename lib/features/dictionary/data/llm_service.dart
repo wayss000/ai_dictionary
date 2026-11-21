@@ -53,7 +53,9 @@ class ExplainResponse {
 
 /// 调用大模型失败时抛出的异常。
 class LlmException implements Exception {
-  LlmException(this.message);
+  LlmException(this.message, {this.englishMessage});
+
+  final String? englishMessage;
 
   final String message;
 
@@ -77,7 +79,11 @@ class LlmService {
     required String systemPrompt,
   }) async {
     if (!config.isConfigured) {
-      throw LlmException('尚未配置模型，请点击右上角设置填写 API 地址、API Key 和模型名称。');
+      throw LlmException(
+        '尚未配置模型，请点击右上角设置填写 API 地址、API Key 和模型名称。',
+        englishMessage:
+            'No model configured. In Settings, enter the API URL, API key, and model name.',
+      );
     }
 
     if (config.provider == LlmProvider.chatGpt) {
@@ -121,6 +127,8 @@ class LlmService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw LlmException(
         '请求失败（HTTP ${response.statusCode}）：${_briefError(response.body)}',
+        englishMessage:
+            'Request failed (HTTP ${response.statusCode}): ${_briefError(response.body)}',
       );
     }
 
@@ -128,7 +136,10 @@ class LlmService {
         jsonDecode(utf8.decode(response.bodyBytes)) as Map<String, dynamic>;
     final choices = data['choices'] as List?;
     if (choices == null || choices.isEmpty) {
-      throw LlmException('模型未返回任何结果。');
+      throw LlmException(
+        '模型未返回任何结果。',
+        englishMessage: 'The model returned no results.',
+      );
     }
     final content =
         ((choices.first as Map<String, dynamic>)['message']
@@ -156,7 +167,10 @@ class LlmService {
   /// 只验证配置是否可用（发起一次极小的对话请求）。
   Future<void> testConnection(LlmConfig config) async {
     if (!config.isConfigured) {
-      throw LlmException('请先填写 API Key 和模型名称。');
+      throw LlmException(
+        '请先填写 API Key 和模型名称。',
+        englishMessage: 'Enter the API key and model name first.',
+      );
     }
     if (config.provider == LlmProvider.chatGpt) {
       await ChatGptPlan.instance.infer(
@@ -188,6 +202,8 @@ class LlmService {
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw LlmException(
         '连接失败（HTTP ${response.statusCode}）：${_briefError(response.body)}',
+        englishMessage:
+            'Connection failed (HTTP ${response.statusCode}): ${_briefError(response.body)}',
       );
     }
   }
@@ -211,7 +227,10 @@ class LlmService {
 
     final term = json['term']?.toString() ?? '';
     if (term.isEmpty) {
-      throw LlmException('模型返回的数据格式不完整，请重试。');
+      throw LlmException(
+        '模型返回的数据格式不完整，请重试。',
+        englishMessage: 'The model returned incomplete data. Try again.',
+      );
     }
 
     return DictionaryResult(
@@ -248,7 +267,11 @@ class LlmService {
         } catch (_) {}
       }
     }
-    throw LlmException('无法解析模型返回的数据，请重试。');
+    throw LlmException(
+      '无法解析模型返回的数据，请重试。',
+      englishMessage:
+          'Could not read the data returned by the model. Try again.',
+    );
   }
 
   String _briefError(String body) {

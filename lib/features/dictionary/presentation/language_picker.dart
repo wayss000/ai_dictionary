@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/app_strings.dart';
+
 /// 底部弹层中"管理语言组合"的返回信号，主页面收到后跳转设置。
 const kManageLanguageSignal = '__manage_language__';
 
@@ -8,6 +10,7 @@ Future<String?> showLanguagePicker(
   required List<String> languagePairs,
   required String selectedLanguagePair,
 }) {
+  final l10n = AppStrings.of(context);
   return showModalBottomSheet<String>(
     context: context,
     showDragHandle: true,
@@ -16,9 +19,9 @@ Future<String?> showLanguagePicker(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const ListTile(
-              title: Text('选择语言组合'),
-              subtitle: Text('输入语言 → 输出语言'),
+            ListTile(
+              title: Text(l10n.selectPair),
+              subtitle: Text(l10n.pairDirection),
             ),
             for (final pair in languagePairs)
               ListTile(
@@ -27,13 +30,13 @@ Future<String?> showLanguagePicker(
                       ? Icons.radio_button_checked
                       : Icons.radio_button_off,
                 ),
-                title: Text(pair),
+                title: Text(l10n.pairName(pair)),
                 onTap: () => Navigator.of(context).pop(pair),
               ),
             ListTile(
               leading: const Icon(Icons.tune),
-              title: const Text('管理语言组合'),
-              subtitle: const Text('在设置中添加、删除或切换'),
+              title: Text(l10n.managePairs),
+              subtitle: Text(l10n.managePairsHelp),
               onTap: () => Navigator.of(context).pop(kManageLanguageSignal),
             ),
             const SizedBox(height: 12),

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/app_strings.dart';
 import 'package:flutter/services.dart';
 
 import '../application/dictionary_view_model.dart';
@@ -9,7 +11,9 @@ import 'language_picker.dart';
 import 'query_panel.dart';
 
 class DictionaryPage extends StatefulWidget {
-  const DictionaryPage({super.key});
+  const DictionaryPage({required this.onLocaleSelected, super.key});
+
+  final Future<bool> Function(Locale) onLocaleSelected;
 
   @override
   State<DictionaryPage> createState() => _DictionaryPageState();
@@ -32,14 +36,16 @@ class _DictionaryPageState extends State<DictionaryPage> {
     super.dispose();
   }
 
+  AppStrings get l10n => AppStrings.of(context);
+
   String _resultToPlainText(DictionaryResult result) {
     final buffer = StringBuffer()
       ..writeln('${result.term}：${result.translation}');
     if (result.context.isNotEmpty) {
-      buffer.writeln('当前语境：${result.context}');
+      buffer.writeln('${l10n.context}: ${result.context}');
     }
     if (result.partOfSpeech.isNotEmpty) {
-      buffer.writeln('词性：${result.partOfSpeech}');
+      buffer.writeln('${l10n.partOfSpeech}: ${result.partOfSpeech}');
     }
     for (final example in result.examples) {
       buffer
@@ -56,7 +62,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('结果已复制')));
+    ).showSnackBar(SnackBar(content: Text(l10n.copied)));
   }
 
   Future<void> _selectLanguage() async {
@@ -78,6 +84,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
       context,
       viewModel: _viewModel,
       initialTab: initialTab,
+      onLocaleSelected: widget.onLocaleSelected,
     );
   }
 
@@ -97,7 +104,7 @@ class _DictionaryPageState extends State<DictionaryPage> {
                   Padding(
                     padding: EdgeInsets.fromLTRB(inset, 10, inset, 10),
                     child: DictionaryHeader(
-                      languagePair: _viewModel.languagePair,
+                      languagePair: l10n.pairName(_viewModel.languagePair),
                       onLanguagePressed: _selectLanguage,
                       onSettingsPressed: _openSettings,
                     ),
@@ -115,7 +122,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
                                 child: QueryPanel(
                                   controller: _queryController,
                                   isLoading: _viewModel.isLoading,
-                                  modelLabel: _viewModel.modelLabel,
+                                  modelLabel: _viewModel.config.isConfigured
+                                      ? _viewModel.modelLabel
+                                      : l10n.defaultModel,
                                   onExplain: _explain,
                                 ),
                               ),
@@ -132,7 +141,9 @@ class _DictionaryPageState extends State<DictionaryPage> {
                                   isLoading: _viewModel.isLoading,
                                   hasResult: _viewModel.hasResult,
                                   hasError: _viewModel.hasError,
-                                  errorMessage: _viewModel.errorMessage,
+                                  errorMessage: l10n.isEnglish
+                                      ? _viewModel.englishErrorMessage
+                                      : _viewModel.errorMessage,
                                   result: _viewModel.result,
                                   onCopy: _copyResult,
                                   onRetry: _explain,
@@ -212,7 +223,7 @@ class DictionaryHeader extends StatelessWidget {
         const SizedBox(width: 8),
         IconButton(
           onPressed: onSettingsPressed,
-          tooltip: '设置',
+          tooltip: AppStrings.of(context).settings,
           icon: const Icon(Icons.settings_outlined),
         ),
       ],

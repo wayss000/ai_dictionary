@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../app/app_strings.dart';
+
 import '../data/llm_service.dart';
 
 class DictionaryResultCard extends StatelessWidget {
@@ -24,10 +26,11 @@ class DictionaryResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppStrings.of(context);
     if (isLoading) return const _LoadingResultCard();
     if (hasError) {
       return _ErrorResultCard(
-        message: errorMessage ?? '请求失败，请重试。',
+        message: errorMessage ?? l10n.requestFailed,
         onRetry: onRetry,
       );
     }
@@ -47,7 +50,7 @@ class DictionaryResultCard extends StatelessWidget {
               const Divider(height: 36),
             if (result.context.isNotEmpty) ...[
               ResultSection(
-                title: '当前语境',
+                title: l10n.context,
                 child: Text(
                   result.context,
                   style: const TextStyle(fontSize: 15, height: 1.6),
@@ -57,7 +60,7 @@ class DictionaryResultCard extends StatelessWidget {
             ],
             if (result.partOfSpeech.isNotEmpty) ...[
               ResultSection(
-                title: '词性',
+                title: l10n.partOfSpeech,
                 child: Text(
                   result.partOfSpeech,
                   style: const TextStyle(fontSize: 15),
@@ -67,7 +70,7 @@ class DictionaryResultCard extends StatelessWidget {
             ],
             if (result.examples.isNotEmpty)
               ResultSection(
-                title: '例句',
+                title: l10n.examples,
                 child: _ExampleText(
                   examples: result.examples,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -104,6 +107,7 @@ class _ErrorResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppStrings.of(context);
     return Card(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
@@ -117,8 +121,8 @@ class _ErrorResultCard extends StatelessWidget {
                   color: Theme.of(context).colorScheme.error,
                 ),
                 const SizedBox(width: 8),
-                const Text(
-                  '解释失败',
+                Text(
+                  l10n.explanationFailed,
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
                 ),
               ],
@@ -136,7 +140,7 @@ class _ErrorResultCard extends StatelessWidget {
             TextButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh, size: 17),
-              label: const Text('重试'),
+              label: Text(l10n.retry),
             ),
           ],
         ),
@@ -153,6 +157,7 @@ class _ResultHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppStrings.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -187,7 +192,7 @@ class _ResultHeading extends StatelessWidget {
         ),
         IconButton(
           onPressed: onCopy,
-          tooltip: '复制结果',
+          tooltip: l10n.copyResult,
           icon: const Icon(Icons.copy_outlined, size: 18),
         ),
       ],
@@ -243,11 +248,12 @@ class _ResultFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppStrings.of(context);
     return Row(
       children: [
         Expanded(
           child: Text(
-            '由 $model 生成，AI 解释可能存在偏差，请结合上下文判断。',
+            l10n.resultAttribution(model),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
               color: Theme.of(context).colorScheme.onSurfaceVariant,
             ),
@@ -256,7 +262,7 @@ class _ResultFooter extends StatelessWidget {
         TextButton.icon(
           onPressed: onRetry,
           icon: const Icon(Icons.refresh, size: 17),
-          label: const Text('重新解释'),
+          label: Text(l10n.translateAgain),
         ),
       ],
     );

@@ -1,3 +1,4 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -31,6 +32,45 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('日语 → 中文'), findsOneWidget);
+  });
+
+  testWidgets('switches the interface language and restores it on launch', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const AiDictionaryApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('设置'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('界面语言'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('English'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('App language'), findsOneWidget);
+    expect(find.text('Close'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(find.text('Translate'), findsOneWidget);
+    expect(find.text('Auto-detect → Chinese'), findsOneWidget);
+    expect(find.text('transformer'), findsOneWidget);
+
+    await tester.tap(find.text('Translate'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('No model configured.'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pumpWidget(const AiDictionaryApp());
+    await tester.pumpAndSettle();
+    expect(find.text('Translate'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Settings'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('App language'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('简体中文'));
+    await tester.pumpAndSettle();
+    expect(find.text('关闭'), findsOneWidget);
   });
 
   testWidgets('can switch the new model configuration provider', (

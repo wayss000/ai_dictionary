@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import '../../../app/app_strings.dart';
 import 'package:flutter/services.dart';
 
 class QueryPanel extends StatelessWidget {
@@ -17,6 +19,7 @@ class QueryPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppStrings.of(context);
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     return Card(
@@ -28,7 +31,7 @@ class QueryPanel extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              '原文',
+              l10n.sourceText,
               style: theme.textTheme.labelLarge?.copyWith(
                 color: colors.onSurfaceVariant,
               ),
@@ -55,8 +58,8 @@ class QueryPanel extends StatelessWidget {
                   style: theme.textTheme.titleLarge?.copyWith(height: 1.4),
                   maxLines: 6,
                   textInputAction: TextInputAction.newline,
-                  decoration: const InputDecoration(
-                    hintText: '输入单词、短语或句子',
+                  decoration: InputDecoration(
+                    hintText: l10n.queryHint,
                     contentPadding: EdgeInsets.zero,
                   ),
                 ),
@@ -82,7 +85,7 @@ class QueryPanel extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Tooltip(
-                  message: 'Enter 翻译 · Shift + Enter 换行',
+                  message: l10n.queryShortcut,
                   child: FilledButton.icon(
                     onPressed: isLoading ? null : onExplain,
                     icon: isLoading
@@ -92,7 +95,7 @@ class QueryPanel extends StatelessWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.arrow_forward, size: 18),
-                    label: Text(isLoading ? '翻译中' : '翻译'),
+                    label: Text(isLoading ? l10n.translating : l10n.translate),
                   ),
                 ),
               ],
