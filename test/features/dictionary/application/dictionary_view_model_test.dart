@@ -191,7 +191,14 @@ void main() {
     final viewModel = DictionaryViewModel();
     await Future<void>.delayed(Duration.zero);
 
-    expect(viewModel.promptTemplates, hasLength(1));
+    expect(viewModel.promptTemplates, hasLength(2));
+    expect(
+      viewModel.promptTemplates.map((t) => t.id),
+      containsAll([
+        PromptTemplate.defaultPromptId,
+        PromptTemplate.sentencePromptId,
+      ]),
+    );
     expect(viewModel.selectedPrompt.id, PromptTemplate.defaultPromptId);
     expect(viewModel.selectedPrompt.content, contains('{word}'));
     expect(viewModel.selectedPrompt.content, contains('{language}'));
@@ -225,10 +232,20 @@ void main() {
   });
 
   test(
-    'savePrompt adds and activates; select and delete with fallback',
+    'savePrompt adds and activates; built-in prompts cannot be deleted',
     () async {
       final viewModel = DictionaryViewModel();
       await Future<void>.delayed(Duration.zero);
+
+      // 初始内置两套：词语翻译 + 短句翻译。
+      expect(viewModel.promptTemplates, hasLength(2));
+      expect(
+        viewModel.promptTemplates.map((t) => t.id),
+        containsAll([
+          PromptTemplate.defaultPromptId,
+          PromptTemplate.sentencePromptId,
+        ]),
+      );
 
       await viewModel.savePrompt(
         const PromptTemplate(
@@ -238,27 +255,25 @@ void main() {
         ),
       );
       // 新保存的模板自动生效。
-      expect(viewModel.promptTemplates, hasLength(2));
+      expect(viewModel.promptTemplates, hasLength(3));
       expect(viewModel.selectedPrompt.id, 'p1');
 
+      // 内置模板不可删除。
+      await viewModel.deletePrompt(PromptTemplate.defaultPromptId);
+      expect(viewModel.promptTemplates, hasLength(3));
+
+      // 切回内置默认后删除自定义模板，回退到第一个内置模板。
       await viewModel.selectPrompt(PromptTemplate.defaultPromptId);
       expect(viewModel.selectedPrompt.id, PromptTemplate.defaultPromptId);
-
-      // 删除生效模板后自动切到剩余模板。
-      await viewModel.deletePrompt(PromptTemplate.defaultPromptId);
-      expect(viewModel.promptTemplates, hasLength(1));
-      expect(viewModel.selectedPrompt.id, 'p1');
-
-      // 至少保留一个模板：删除最后一个模板会被拒绝。
       await viewModel.deletePrompt('p1');
-      expect(viewModel.promptTemplates, hasLength(1));
-      expect(viewModel.selectedPrompt.id, 'p1');
+      expect(viewModel.promptTemplates, hasLength(2));
+      expect(viewModel.selectedPrompt.id, PromptTemplate.defaultPromptId);
 
       viewModel.dispose();
     },
   );
 
-  test('restoreDefaultPrompt resets the default template content', () async {
+  test('restoreBuiltInPrompt resets the default template content', () async {
     final viewModel = DictionaryViewModel();
     await Future<void>.delayed(Duration.zero);
 
@@ -271,7 +286,7 @@ void main() {
     );
     expect(viewModel.selectedPrompt.content, '自定义内容');
 
-    await viewModel.restoreDefaultPrompt();
+    await viewModel.restoreBuiltInPrompt(PromptTemplate.defaultPromptId);
     expect(viewModel.selectedPrompt.name, PromptTemplate.defaultName);
     expect(viewModel.selectedPrompt.content, PromptTemplate.defaultContent);
 
@@ -301,15 +316,17 @@ class _StallingLlmService extends LlmService {
     required String systemPrompt,
   }) async {
     if (++calls == 1) return Completer<ExplainResponse>().future;
+    final result = DictionaryResult(
+      term: query,
+      translation: '翻译',
+      context: '',
+      partOfSpeech: '',
+      examples: const [],
+      model: config.model,
+    );
     return ExplainResponse(
-      result: DictionaryResult(
-        term: query,
-        translation: '翻译',
-        context: '',
-        partOfSpeech: '',
-        examples: const [],
-        model: config.model,
-      ),
+      result: result,
+      results: [result],
       rawOutput: '',
       finalPrompt: systemPrompt,
     );

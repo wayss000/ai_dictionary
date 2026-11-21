@@ -85,7 +85,7 @@ void main() {
             hasResult: true,
             hasError: false,
             errorMessage: null,
-            result: response.result,
+            results: [response.result],
             onCopy: () {},
             onRetry: () {},
           ),
@@ -104,5 +104,27 @@ void main() {
     expect(result.rawFallback, isNull);
     expect(result.term, 'word');
     expect(result.translation, '词');
+  });
+
+  test('parses a JSON array into multiple results', () async {
+    const array = '[{"term":"apple","translation":"苹果"},'
+        '{"term":"banana","translation":"香蕉"}]';
+    final response = await explain(array);
+    expect(response.results, hasLength(2));
+    expect(response.result.term, 'apple');
+    expect(response.results[1].term, 'banana');
+    expect(response.results[1].translation, '香蕉');
+  });
+
+  test('skips empty items and falls back when an array yields nothing', () async {
+    const sparse = '[{"term":"apple","translation":"苹果"},{"translation":""}]';
+    final response = await explain(sparse);
+    expect(response.results, hasLength(1));
+    expect(response.result.term, 'apple');
+
+    const empty = '[{"translation":""}]';
+    final fallback = await explain(empty);
+    expect(fallback.results, hasLength(1));
+    expect(fallback.result.rawFallback, empty);
   });
 }

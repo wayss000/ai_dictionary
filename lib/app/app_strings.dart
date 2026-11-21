@@ -99,13 +99,13 @@ class AppStrings {
       _choose('例如 简短词典 / 详细解释', 'e.g. Short definition / Detailed explanation');
   String get promptContent => _choose('提示词内容', 'Prompt content');
   String get promptHint => _choose(
-    '支持 {word}（用户输入的单词）和 {language}（语言方向）占位符',
-    'Supports {word} (user input) and {language} (translation direction).',
+    '支持 {word}（用户输入）和 {language}（语言方向）占位符；多个词语可用数组返回多条结果',
+    'Supports {word} (user input) and {language} (direction); return an array for multiple words.',
   );
   String get resetPrompt => _choose('恢复默认内容', 'Restore default content');
   String get promptHelp => _choose(
-    '提示词会与用户输入的单词结合（替换 {word} / {language} 占位符）后，统一发送给当前生效的模型。',
-    'The app fills in {word} and {language}, then sends the prompt to the active model.',
+    '提示词会与用户输入结合（替换 {word} / {language} 占位符）后发送给当前生效的模型。"词语翻译"支持一次输入多个词语（每行或逗号分隔一个），模型返回数组后会逐条展示。',
+    'The prompt is filled with {word} and {language}, then sent to the active model. "Word translation" accepts several words at once (one per line or comma-separated); an array response is shown item by item.',
   );
   String get untitledPrompt => _choose('未命名模板', 'Untitled template');
   String get keepOnePrompt => _choose('至少保留一个模板', 'Keep at least one template');
@@ -164,8 +164,15 @@ class AppStrings {
   String get languageSaveFailed =>
       _choose('无法保存界面语言。', 'Could not save the app language.');
 
-  String get defaultPromptName =>
-      _choose('默认词典提示词', 'Default dictionary prompt');
+  String get wordTranslationPrompt =>
+      _choose('词语翻译', 'Word translation');
+  String get sentenceTranslationPrompt =>
+      _choose('短句翻译', 'Sentence translation');
+  String get builtInPromptCannotDelete =>
+      _choose('内置模板不可删除', 'Built-in templates cannot be deleted');
+
+  String multipleResults(int count) =>
+      _choose('共 $count 条结果', '$count results');
 
   String pairName(String pair) => switch (pair) {
     '自动识别 → 中文' => autoToChinese,
